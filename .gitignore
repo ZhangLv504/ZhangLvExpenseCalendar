@@ -1,0 +1,22 @@
+cmake-build-*/
+build/
+build-*/
+build_*.log
+# dist/：交付 APK 体积过大，不入库（本机 dist/ 保留备份）；只把版本清单入库以便核对校验和
+dist/*
+!dist/README.md
+*.apk
+.idea/
+.vscode/
+.workbuddy/
+.cache/
+
+# CMake / 编译产物
+CMakeUserPresets.json
+.cxx/
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.exe
