@@ -6,6 +6,8 @@
 
 #include "Transaction.h"
 
+class QSqlDatabase;
+
 namespace zl {
 
 // 月度收支汇总，单位：分
@@ -13,6 +15,13 @@ struct MonthSummary {
     std::int64_t incomeCents = 0;
     std::int64_t expenseCents = 0;
     int count = 0;
+};
+
+// 分类条目：builtin 为 true 表示内置分类（不可删除）
+struct CategoryRecord {
+    QString name;
+    int type = 0;      // 0 支出 / 1 收入，对齐 TxType
+    bool builtin = false;
 };
 
 // 单一账本的 SQLite 存储引擎。
@@ -52,7 +61,19 @@ public:
     // 全部账目条数。
     int count(QString *error = nullptr) const;
 
+    // ---- 分类管理 ----
+    // 列出指定类型的全部分类（内置在前，自定义在后），内置分类在首次打开时自动播种。
+    QVector<CategoryRecord> categories(int type, QString *error = nullptr) const;
+
+    // 新增自定义分类；名称不能为空、不能与同类型已有分类重名。
+    bool addCategory(int type, const QString &name, QString *error = nullptr);
+
+    // 删除自定义分类；内置分类不可删，已被账目引用的分类不可删。
+    bool removeCategory(int type, const QString &name, QString *error = nullptr);
+
 private:
+    bool seedBuiltinCategories(class QSqlDatabase &db, QString *error);
+
     class Private;
     Private *d;
 };

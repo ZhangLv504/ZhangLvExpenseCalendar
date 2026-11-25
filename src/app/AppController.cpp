@@ -1,10 +1,12 @@
 #include "AppController.h"
 
 #include <QDate>
+#include <QDateTime>
 #include <QVariant>
 
 #include "Money.h"
 #include "Category.h"
+#include "DateTimeUtil.h"
 
 namespace zl {
 
@@ -55,7 +57,8 @@ bool AppController::initialize(QString *error)
 }
 
 QString AppController::addRecord(int type, const QString &amountText,
-                                 const QString &category, const QString &note)
+                                 const QString &category, const QString &note,
+                                 const QString &dateText)
 {
     std::int64_t cents = 0;
     if (!Money::parse(amountText, &cents))
@@ -70,6 +73,9 @@ QString AppController::addRecord(int type, const QString &amountText,
     tx.amountCents = cents;
     tx.category = category.trimmed();
     tx.note = note.trimmed();
+    if (!dateText.trimmed().isEmpty()
+        && !DateTimeUtil::parse(dateText, &tx.createdMs))
+        return QStringLiteral("日期格式不正确，应为 年-月-日 时:分");
 
     QString error;
     if (!m_db->insert(&tx, &error)) {
@@ -81,7 +87,8 @@ QString AppController::addRecord(int type, const QString &amountText,
 }
 
 QString AppController::updateRecord(int row, int type, const QString &amountText,
-                                    const QString &category, const QString &note)
+                                    const QString &category, const QString &note,
+                                    const QString &dateText)
 {
     std::int64_t cents = 0;
     if (!Money::parse(amountText, &cents))
@@ -97,6 +104,9 @@ QString AppController::updateRecord(int row, int type, const QString &amountText
     tx.amountCents = cents;
     tx.category = category.trimmed();
     tx.note = note.trimmed();
+    if (!dateText.trimmed().isEmpty()
+        && !DateTimeUtil::parse(dateText, &tx.createdMs))
+        return QStringLiteral("日期格式不正确，应为 年-月-日 时:分");
 
     QString error;
     if (!m_db->update(tx, &error)) {
@@ -131,25 +141,73 @@ QVariantMap AppController::recordAt(int row) const
     map.insert(QStringLiteral("amountText"), Money::format(tx.amountCents));
     map.insert(QStringLiteral("category"), tx.category);
     map.insert(QStringLiteral("note"), tx.note);
+    map.insert(QStringLiteral("dateText"), DateTimeUtil::format(tx.createdMs));
     return map;
 }
 
 QStringList AppController::expenseCategories() const
 {
-    const QVector<QString> names = Category::expenseNames();
     QStringList list;
-    for (const QString &n : names)
-        list.append(n);
+    if (!m_db || !m_db->isOpen())
+        return list;
+    const QVector<CategoryRecord> recs = m_db->categories(
+        static_cast<int>(TxType::Expense), nullptr);
+    for (const CategoryRecord &c : recs)
+        list.append(c.name);
     return list;
 }
 
 QStringList AppController::incomeCategories() const
 {
-    const QVector<QString> names = Category::incomeNames();
     QStringList list;
-    for (const QString &n : names)
-        list.append(n);
+    if (!m_db || !m_db->isOpen())
+        return list;
+    const QVector<CategoryRecord> recs = m_db->categories(
+        static_cast<int>(TxType::Income), nullptr);
+    for (const CategoryRecord &c : recs)
+        list.append(c.name);
     return list;
+}
+
+QVariantList AppController::categoryDetails(int type) const
+{
+    QVariantList list;
+    if (!m_db || !m_db->isOpen())
+        return list;
+    const QVector<CategoryRecord> recs = m_db->categories(type, nullptr);
+    for (const CategoryRecord &c : recs) {
+        QVariantMap m;
+        m.insert(QStringLiteral("name"), c.name);
+        m.insert(QStringLiteral("builtin"), c.builtin);
+        list.append(m);
+    }
+    return list;
+}
+
+QString AppController::addCategory(int type, const QString &name)
+{
+    if (!m_db)
+        return QStringLiteral("数据库未初始化");
+    QString error;
+    if (!m_db->addCategory(type, name, &error)) {
+        emit errorOccurred(error);
+        return error;
+    }
+    emit categoriesChanged();
+    return QString();
+}
+
+QString AppController::removeCategory(int type, const QString &name)
+{
+    if (!m_db)
+        return QStringLiteral("数据库未初始化");
+    QString error;
+    if (!m_db->removeCategory(type, name, &error)) {
+        emit errorOccurred(error);
+        return error;
+    }
+    emit categoriesChanged();
+    return QString();
 }
 
 void AppController::refresh()

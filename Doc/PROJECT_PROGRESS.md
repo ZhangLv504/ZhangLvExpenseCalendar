@@ -7,9 +7,9 @@
 
 | 项         | 当前值                                                       |
 | ---------- | ------------------------------------------------------------ |
-| 当前里程碑 | **M0 — 已交付**                                              |
-| 当前版本   | `0.1.0`（versionCode 1）                                     |
-| 下一步动作 | 进入 M1 收尾：分类自定义、明细编辑/删除交互打磨与边界回归（真机操作先遵守第 1.1 节安全契约） |
+| 当前里程碑 | **M1 — 已交付**                                              |
+| 当前版本   | `0.2.0`（versionCode 2）                                     |
+| 下一步动作 | 进入 M2：搜索筛选、预算、CSV 导出与备份（正式签名仍在 M5 前落地；真机操作先遵守第 1.1 节安全契约） |
 
 ## 1. 环境契约（锁定）
 
@@ -38,10 +38,11 @@
 | 里程碑 | 目标                                                    | 状态   |
 | ------ | ------------------------------------------------------- | ------ |
 | M0     | 工程骨架、基础页面导航、SQLite 初始化、Android 打包链路 | 已交付 |
-| M1     | 核心记账闭环（增删改查、分类、明细列表、本地持久化）    | 主体已交付（随 M0 落地） |
+| M1     | 核心记账闭环（增删改查、分类、明细列表、本地持久化）    | 已交付（0.2.0） |
 | M2+    | 搜索筛选、预算、CSV 导出与备份等（按需迭代）            | 未开始 |
 
-> 说明：M0 搭建骨架时已将核心记账闭环（增删改查 + 事务 + 月度汇总）一并实现并通过单测与模拟器验收，因此 M1 主体功能已提前达成；M1 仅剩交互打磨与边界回归。
+> 说明：M0 搭建骨架时已将核心记账闭环一并实现；0.2.0 补齐 M1 收尾项——分类持久化与自定义管理、
+> 编辑页删除入口（确认页）、日期时间手工录入，并在模拟器完成三条链路的交互验收。
 
 ## 3. 架构与目录
 
@@ -51,15 +52,17 @@ ZhangLvExpense/
 ├── src/
 │   ├── core/                    # 纯 C++ 核心层（可独立单测，无 QML 依赖）
 │   │   ├── Money.{h,cpp}        # 金额解析/格式化，全链路 int64_t 分，逐字符处理禁用浮点
+│   │   ├── DateTimeUtil.{h,cpp}# "yyyy-MM-dd HH:mm" 解析/格式化，毫秒时间戳流转
 │   │   ├── Transaction.{h,cpp}  # 账目模型 + 合法性校验
-│   │   ├── Category.{h,cpp}     # 内置收支分类
-│   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/月度汇总，写操作全部事务
+│   │   ├── Category.{h,cpp}     # 内置收支分类（首次打开播种进 SQLite）
+│   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/月度汇总/分类 CRUD，写操作全部事务
 │   └── app/
 │       ├── main.cpp             # 入口：Basic 样式、应用私有目录建库、注册 QML 上下文
-│       ├── AppController.{h,cpp}# QML 桥接：金额以元字符串进出，内部转分
+│       ├── AppController.{h,cpp}# QML 桥接：金额以元字符串进出，内部转分；分类管理；日期时间
 │       ├── TransactionModel.*   # QAbstractListModel，供 ListView 绑定
-│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、明细、记一笔/编辑页
-├── tests/                       # tst_money / tst_database（Qt Test）
+│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、明细、记一笔/编辑、删除确认、分类管理
+├── tests/                       # tst_money / tst_database / tst_datetime（Qt Test）
+├── scripts/device.sh            # 真机/模拟器安全操作封装（白名单；ui 动作仅限 emulator-*）
 ├── android/                     # Android 打包模板（manifest 竖屏、包名、gradle）
 └── dist/                        # 交付 APK（不入库）+ README.md 版本清单
 ```
@@ -68,30 +71,57 @@ ZhangLvExpense/
 
 `transactions`：id(INTEGER PK AUTOINCREMENT)、type(0支出/1收入)、amount_cents(INTEGER)、category(TEXT)、note(TEXT)、created_ms(INTEGER)，索引 `idx_transactions_created_ms`。金额字段为 64 位整数分，无浮点。
 
-## 4. 验收结果（M0 / 0.1.0）
+`categories`：id(INTEGER PK AUTOINCREMENT)、type(0支出/1收入)、name(TEXT)、builtin(INTEGER，1=内置不可删)，唯一约束 `UNIQUE(type, name)`。首次打开时在空表内播种内置分类；自定义分类不可与同类型重名，被账目引用的分类不可删。
 
-### 桌面单测（mingw_64，Qt Test）
+## 4. 验收结果
+
+### 4.1 M1 / 0.2.0（当前）
+
+#### 桌面单测（mingw_64，Qt Test）
+- `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
+- `tst_database`：14 项通过（建表幂等、增删改查、跨月边界、月度汇总、空账本、事务回滚、亿元级金额、分类播种/自定义增删/删除守卫）
+- `tst_datetime`：17 项通过（合法/非法格式、空串、往返转换、跨月跨年、闰年 2/29）
+- CTest：`100% tests passed, 0 tests failed out of 3`（合计 62 项）
+
+#### Android 构建
+- arm64-v8a：Release，交付包 `dist/zhanglv-expense-0.2.0-arm64-v8a-debug.apk`（20 MB，SHA-256 见 dist/README.md）
+- x86_64：Debug，模拟器验收包（`build-android-x86_64`）
+- aapt 校验：包名 `com.zhanglv.expense` / versionCode 2 / versionName 0.2.0 / minSdk 26 / targetSdk 34 / 竖屏 / 对应 ABI
+
+#### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
+- 安装：`scripts/device.sh install`（设备唯一性 + 包名 + ABI 校验通过）；冷启动无崩溃，logcat 无 QML 错误/FATAL
+- 分类管理：支出内置 9 类、收入内置 6 类正常显示；新增自定义分类 TestCat 成功；内置分类“删除”按钮禁用；重名新增被拒并提示“分类已存在”；删除自定义分类成功
+- 日期时间：记一笔手工录入 `2026-11-20 09:15`，保存后明细时间显示正确、支出汇总 12.34
+- 编辑迁月：金额改为 20.00、日期改为 `2026-10-20 09:15` 后，11 月汇总归零、10 月出现 -20.00（跨月归属正确）
+- 删除：编辑页“删除”→ 确认页“确认删除”后回到明细页，10 月汇总归零
+- 持久化：新增账目 5.00 与自定义分类 PersistCat 后 force-stop 重启，账目与分类均保留（SQLite 真实落盘）
+- 自动化工具：`scripts/device.sh` 新增 `start/stop/shot/ui`；`ui`（tap/swipe/text/key）硬校验设备序列号为 `emulator-*`，真机一律拒绝
+
+### 4.2 M0 / 0.1.0（历史）
+
+#### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
 - `tst_database`：11 项通过（建表幂等、增删改查、跨月边界、月度汇总、空账本、事务回滚拒绝非法数据、亿元级金额精度）
 - CTest：`100% tests passed, 0 tests failed out of 2`
 
-### Android 构建
+#### Android 构建
 - arm64-v8a：Release，交付包 `dist/zhanglv-expense-0.1.0-arm64-v8a-debug.apk`（20 MB，SHA-256 见 dist/README.md）
 - x86_64：Debug，模拟器验收包
 - aapt 校验：包名 `com.zhanglv.expense` / versionCode 1 / versionName 0.1.0 / minSdk 26 / targetSdk 34 / 应用名「掌律记账」/ 竖屏 / 对应 ABI
 
-### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
+#### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
 - 冷启动无崩溃，Qt/QML 加载正常，无运行时错误
 - UI：月度导航、收支汇总卡、明细列表、记一笔按钮正常渲染
 - 闭环：记一笔「支出 餐饮 12.34」→ 保存返回 → 支出汇总更新为 12.34、明细出现 -12.34
 - 持久化：force-stop 后重启，账目仍在（SQLite 真实落盘）
 - 非法金额（格式错误）被拒绝并提示，不落库
 
-### 已知限制
+### 4.3 已知限制
 - 模拟器 SwiftShader 软件渲染下，部分 Qt Quick Controls 控件（ToolBar/Button/ComboBox 背景）出现梯形斜切视觉瑕疵；属模拟器图形栈渲染问题，arm64 真机交付包不受影响。
 - 应用使用 Basic 样式以保证低配设备渲染稳定。
 - 正式签名未接入（当前 debug 签名，仅侧载验证），按约定在 M5 前落地。
 
 ## 5. 变更日志
 
+- **M1 / 0.2.0（2026-11-25）**：分类持久化（`categories` 表 + 内置播种 + 自定义增删与删除守卫）；新增 DateTimeUtil 支持记一笔/编辑时手工录入日期时间；编辑页补删除入口与独立确认页；`scripts/device.sh` 增加模拟器 UI 自动化（仅 emulator-*）；桌面 62 项单测 + 模拟器三条链路验收通过。
 - **M0 / 0.1.0（2026-11-25）**：搭建 Qt 6.8.3 + QML + C++17 + CMake + SQLite 工程骨架；实现 int64_t 分金额引擎与事务化 SQLite 核心层；完成竖屏记账 UI 闭环与双 ABI 打包链路；桌面 42 项单测 + 模拟器验收通过。

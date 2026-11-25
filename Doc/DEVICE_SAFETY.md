@@ -18,6 +18,7 @@
 | `adb shell screencap` / `screenrecord` | 截图/录屏 |
 | `adb pull` | 从设备取文件到本机 |
 | `adb push`（仅 `/sdcard/Download` 等用户目录） | 向设备用户目录推送文件 |
+| `adb shell input`（**仅 `emulator-*` 模拟器**，仅 tap/swipe/text/keyevent 3/4/66/67/122/123） | 模拟器 UI 自动化验收；`scripts/device.sh ui` 内置模拟器校验，真机一律拒绝 |
 
 ## 2. 绝对禁止的操作（会真正损伤设备或数据）
 

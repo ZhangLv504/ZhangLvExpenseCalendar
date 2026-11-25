@@ -1,4 +1,5 @@
 #include "Database.h"
+#include "Category.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -119,7 +120,15 @@ bool Database::open(QString *error)
             ")"),
         QStringLiteral(
             "CREATE INDEX IF NOT EXISTS idx_transactions_created_ms "
-            "ON transactions(created_ms)")
+            "ON transactions(created_ms)"),
+        QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS categories ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  type INTEGER NOT NULL,"
+            "  name TEXT NOT NULL,"
+            "  builtin INTEGER NOT NULL DEFAULT 0,"
+            "  UNIQUE(type, name)"
+            ")")
     };
     for (const QString &sql : ddlStatements) {
         QSqlQuery q(db);
@@ -129,6 +138,52 @@ bool Database::open(QString *error)
             db.close();
             return false;
         }
+    }
+
+    // 播种内置分类（幂等）：仅在 categories 表为空时写入，避免重复或覆盖自定义数据。
+    QSqlQuery cnt(db);
+    if (!cnt.exec(QStringLiteral("SELECT COUNT(*) FROM categories"))) {
+        if (error) *error = lastError(cnt, QStringLiteral("分类计数失败"));
+        return false;
+    }
+    cnt.next();
+    if (cnt.value(0).toInt() == 0) {
+        if (!seedBuiltinCategories(db, error))
+            return false;
+    }
+    return true;
+}
+
+bool Database::seedBuiltinCategories(QSqlDatabase &db, QString *error)
+{
+    if (!db.transaction()) {
+        if (error) *error = lastError(db, QStringLiteral("无法开启分类播种事务"));
+        return false;
+    }
+    const auto insertOne = [&db, error](int type, const QString &name) -> bool {
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "INSERT INTO categories(type, name, builtin) VALUES(?, ?, 1)"));
+        q.addBindValue(type);
+        q.addBindValue(name);
+        if (!q.exec()) {
+            if (error) *error = lastError(q, QStringLiteral("播种内置分类失败"));
+            return false;
+        }
+        return true;
+    };
+    const int expenseType = static_cast<int>(TxType::Expense);
+    const int incomeType = static_cast<int>(TxType::Income);
+    for (const QString &name : Category::expenseNames()) {
+        if (!insertOne(expenseType, name)) { db.rollback(); return false; }
+    }
+    for (const QString &name : Category::incomeNames()) {
+        if (!insertOne(incomeType, name)) { db.rollback(); return false; }
+    }
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交内置分类失败"));
+        return false;
     }
     return true;
 }
@@ -382,6 +437,138 @@ int Database::count(QString *error) const
     if (q.next())
         return q.value(0).toInt();
     return 0;
+}
+
+QVector<CategoryRecord> Database::categories(int type, QString *error) const
+{
+    QVector<CategoryRecord> result;
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return result;
+    }
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "SELECT name, type, builtin FROM categories WHERE type=? "
+        "ORDER BY builtin DESC, id ASC"));
+    q.addBindValue(type);
+    if (!q.exec()) {
+        if (error) *error = lastError(q, QStringLiteral("查询分类失败"));
+        return result;
+    }
+    while (q.next()) {
+        CategoryRecord c;
+        c.name = q.value(0).toString();
+        c.type = q.value(1).toInt();
+        c.builtin = q.value(2).toBool();
+        result.append(c);
+    }
+    return result;
+}
+
+bool Database::addCategory(int type, const QString &name, QString *error)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty()) {
+        if (error) *error = QStringLiteral("分类名称不能为空");
+        return false;
+    }
+
+    QSqlDatabase db = d->database();
+    if (!db.isOpen() && !open(error))
+        return false;
+    if (!d->begin(&db, error))
+        return false;
+
+    QSqlQuery chk(db);
+    chk.prepare(QStringLiteral("SELECT COUNT(*) FROM categories WHERE type=? AND name=?"));
+    chk.addBindValue(type);
+    chk.addBindValue(trimmed);
+    if (!chk.exec() || !chk.next()) {
+        db.rollback();
+        if (error) *error = lastError(chk, QStringLiteral("检查分类失败"));
+        return false;
+    }
+    if (chk.value(0).toInt() > 0) {
+        db.rollback();
+        if (error) *error = QStringLiteral("分类已存在");
+        return false;
+    }
+
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "INSERT INTO categories(type, name, builtin) VALUES(?, ?, 0)"));
+    q.addBindValue(type);
+    q.addBindValue(trimmed);
+    if (!q.exec()) {
+        db.rollback();
+        if (error) *error = lastError(q, QStringLiteral("新增分类失败"));
+        return false;
+    }
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交失败"));
+        return false;
+    }
+    return true;
+}
+
+bool Database::removeCategory(int type, const QString &name, QString *error)
+{
+    QSqlDatabase db = d->database();
+    if (!db.isOpen() && !open(error))
+        return false;
+
+    // 先只读校验：内置不可删；被账目引用不可删（防止历史账目分类丢失）。
+    QSqlQuery chk(db);
+    chk.prepare(QStringLiteral("SELECT builtin FROM categories WHERE type=? AND name=?"));
+    chk.addBindValue(type);
+    chk.addBindValue(name);
+    if (!chk.exec() || !chk.next()) {
+        if (error) *error = QStringLiteral("分类不存在");
+        return false;
+    }
+    if (chk.value(0).toBool()) {
+        if (error) *error = QStringLiteral("内置分类不可删除");
+        return false;
+    }
+
+    QSqlQuery used(db);
+    used.prepare(QStringLiteral(
+        "SELECT COUNT(*) FROM transactions WHERE type=? AND category=?"));
+    used.addBindValue(type);
+    used.addBindValue(name);
+    if (!used.exec() || !used.next()) {
+        if (error) *error = lastError(used, QStringLiteral("检查分类引用失败"));
+        return false;
+    }
+    if (used.value(0).toInt() > 0) {
+        if (error) *error = QStringLiteral("该分类已被账目使用，不可删除");
+        return false;
+    }
+
+    if (!d->begin(&db, error))
+        return false;
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral("DELETE FROM categories WHERE type=? AND name=? AND builtin=0"));
+    q.addBindValue(type);
+    q.addBindValue(name);
+    if (!q.exec()) {
+        db.rollback();
+        if (error) *error = lastError(q, QStringLiteral("删除分类失败"));
+        return false;
+    }
+    if (q.numRowsAffected() != 1) {
+        db.rollback();
+        if (error) *error = QStringLiteral("未找到要删除的自定义分类");
+        return false;
+    }
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交失败"));
+        return false;
+    }
+    return true;
 }
 
 } // namespace zl

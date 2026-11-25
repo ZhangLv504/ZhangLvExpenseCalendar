@@ -3,6 +3,9 @@
 # 所有 adb 调用必须经过 safe_adb() 白名单；危险命令（fastboot/root/pm clear/rom flash 等）在此被硬拦截。
 set -euo pipefail
 
+# 阻止 Git Bash(MSYS) 把 /sdcard/... 等设备路径转换成 Windows 本地路径
+export MSYS2_ARG_CONV_EXCL='*'
+
 PKG="com.zhanglv.expense"                                   # 唯一包名基准，不接受外部覆盖
 ADB="E:/Software/Android/Sdk/platform-tools/adb.exe"
 AAPT="E:/Software/Android/Sdk/build-tools/35.0.0/aapt.exe"
@@ -29,6 +32,31 @@ safe_adb() {
         shell)
             case "${2:-}" in
                 getprop|dumpsys|screencap|screenrecord) ;;
+                input)
+                    # 仅模拟器 UI 自动化验收使用，调用前必须经 require_emulator 校验
+                    case "${3:-}" in
+                        tap)
+                            [[ "${4:-}" =~ ^[0-9]+$ && "${5:-}" =~ ^[0-9]+$ ]] \
+                                || die "tap 需要两个数字坐标"
+                            ;;
+                        swipe)
+                            [[ "${4:-}" =~ ^[0-9]+$ && "${5:-}" =~ ^[0-9]+$ \
+                               && "${6:-}" =~ ^[0-9]+$ && "${7:-}" =~ ^[0-9]+$ ]] \
+                                || die "swipe 需要四个数字坐标"
+                            [[ "${8:-}" =~ ^[0-9]+$ ]] || die "swipe 需要持续时间(ms)"
+                            ;;
+                        text)
+                            [[ -n "${4:-}" ]] || die "text 内容不能为空"
+                            ;;
+                        keyevent)
+                            case "${4:-}" in
+                                3|4|66|67|122|123) ;;
+                                *) die "禁止的 keyevent: ${4:-<空>}（仅允许 3/4/66/67/122/123）" ;;
+                            esac
+                            ;;
+                        *) die "禁止的 input 子命令: ${3:-<空>}" ;;
+                    esac
+                    ;;
                 am)
                     case "${3:-}" in
                         start|force-stop) ;;
@@ -60,6 +88,15 @@ require_single_device() {
     [[ "$n" -eq 1 ]] || die "需要恰好 1 台在线设备，当前为 $n 台。请先确认连接（adb devices）。"
     DEVICE_SERIAL=$(printf '%s\n' "$out" | awk 'NR>1 && $2=="device" {print $1; exit}')
     info "设备已确认: $DEVICE_SERIAL"
+}
+
+# ---------- 前置校验：仅允许模拟器（ui 自动化验收用，真机一律拒绝） ----------
+require_emulator() {
+    require_single_device
+    case "$DEVICE_SERIAL" in
+        emulator-*) ;;
+        *) die "该动作仅允许模拟器（emulator-*），当前设备: $DEVICE_SERIAL" ;;
+    esac
 }
 
 # ---------- 校验 APK：包名必须匹配、ABI 必须被设备支持 ----------
@@ -131,6 +168,47 @@ cmd_check() {
     fi
 }
 
+# ---------- 应用启停（am start / am force-stop，均在本应用沙箱内） ----------
+cmd_start() {
+    require_single_device
+    is_installed || die "未安装 $PKG，请先 install"
+    safe_adb shell am start -n "$PKG/org.qtproject.qt.android.bindings.QtActivity"
+}
+
+cmd_stop() {
+    require_single_device
+    safe_adb shell am force-stop "$PKG"
+    info "已强制结束: $PKG"
+}
+
+# ---------- 截图到本机（只读 screencap + pull） ----------
+cmd_shot() {
+    local local_path="${1:-}"
+    [[ -n "$local_path" ]] || die "用法: device.sh shot <本机png路径>"
+    require_single_device
+    safe_adb shell screencap -p /sdcard/zl_shot.png
+    safe_adb pull /sdcard/zl_shot.png "$local_path" >/dev/null
+    info "截图已保存: $local_path"
+}
+
+# ---------- 模拟器 UI 自动化（真机绝对拒绝） ----------
+cmd_ui() {
+    require_emulator
+    local action="${1:-}"
+    shift || true
+    case "$action" in
+        tap)   [[ $# -eq 2 ]] || die "用法: device.sh ui tap <x> <y>"
+               safe_adb shell input tap "$1" "$2" ;;
+        swipe) [[ $# -eq 5 ]] || die "用法: device.sh ui swipe <x1> <y1> <x2> <y2> <ms>"
+               safe_adb shell input swipe "$1" "$2" "$3" "$4" "$5" ;;
+        text)  [[ $# -eq 1 ]] || die "用法: device.sh ui text <内容>"
+               safe_adb shell input text "$1" ;;
+        key)   [[ $# -eq 1 ]] || die "用法: device.sh ui key <3|4|66>"
+               safe_adb shell input keyevent "$1" ;;
+        *) die "未知 ui 动作: ${action:-<空>}（tap/swipe/text/key）" ;;
+    esac
+}
+
 usage() {
     cat <<'EOF'
 用法: device.sh <动作> [参数]
@@ -138,6 +216,9 @@ usage() {
   check                只读查询本应用是否已安装
   install <APK路径>    校验设备/包名/ABI 后安装本应用
   uninstall            严格卸载本应用 com.zhanglv.expense 并验证清除
+  start / stop         启动 / 强制结束本应用
+  shot <本机png路径>   截图并拉取到本机
+  ui tap|swipe|text|key 仅模拟器允许的 UI 自动化（真机一律拒绝）
 
 安全保证：所有 adb 调用经过白名单；fastboot/root/pm clear/rm -rf/刷机等命令被硬拦截。
 包名固定为 com.zhanglv.expense，不接受覆盖。详见 Doc/DEVICE_SAFETY.md。
@@ -149,6 +230,10 @@ case "${1:-}" in
     check)     cmd_check ;;
     install)   cmd_install "${2:-}" ;;
     uninstall) cmd_uninstall ;;
+    start)     cmd_start ;;
+    stop)      cmd_stop ;;
+    shot)      cmd_shot "${2:-}" ;;
+    ui)        shift; cmd_ui "$@" ;;
     -h|--help|help|"") usage ;;
     *) die "未知动作: $1（用 --help 查看用法）" ;;
 esac

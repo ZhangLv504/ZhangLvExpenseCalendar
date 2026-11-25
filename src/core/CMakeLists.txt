@@ -5,6 +5,8 @@ add_library(zlexpense_core STATIC
     Transaction.h
     Category.cpp
     Category.h
+    DateTimeUtil.cpp
+    DateTimeUtil.h
     Database.cpp
     Database.h)
 

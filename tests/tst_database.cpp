@@ -23,6 +23,9 @@ private slots:
     void emptyDatabase();          // 空账本
     void transactionRollback();    // 事务：非法数据不落库
     void largeAmount();            // 边界金额（int64 分）
+    void categorySeed();           // 内置分类播种
+    void categoryCustomCrud();     // 自定义分类增删与重名拒绝
+    void categoryDeleteGuards();   // 内置/被引用分类不可删
 
 private:
     QTemporaryDir m_dir;
@@ -201,6 +204,68 @@ void DatabaseTest::largeAmount()
     QVERIFY(m_db->get(tx.id, &got, &err));
     QCOMPARE(got.amountCents, qint64(999999999999));
     QCOMPARE(zl::Money::format(got.amountCents), QStringLiteral("9999999999.99"));
+}
+
+void DatabaseTest::categorySeed()
+{
+    QString err;
+    const QVector<zl::CategoryRecord> expenses = m_db->categories(
+        static_cast<int>(zl::TxType::Expense), &err);
+    QVERIFY2(expenses.size() >= 9, qPrintable(err));
+    QVERIFY(expenses.first().builtin);
+    QVERIFY(expenses.first().name == QStringLiteral("餐饮"));
+
+    const QVector<zl::CategoryRecord> incomes = m_db->categories(
+        static_cast<int>(zl::TxType::Income), &err);
+    QVERIFY(incomes.size() >= 6);
+    QVERIFY(incomes.first().builtin);
+}
+
+void DatabaseTest::categoryCustomCrud()
+{
+    QString err;
+    const int expenseType = static_cast<int>(zl::TxType::Expense);
+    QVERIFY(m_db->addCategory(expenseType, QStringLiteral("  宠物  "), &err));
+    const QVector<zl::CategoryRecord> list = m_db->categories(expenseType, &err);
+    bool found = false;
+    for (const zl::CategoryRecord &c : list) {
+        if (c.name == QStringLiteral("宠物")) {
+            found = true;
+            QVERIFY(!c.builtin);
+        }
+    }
+    QVERIFY(found);
+
+    // 重名（含内置）拒绝
+    QVERIFY(!m_db->addCategory(expenseType, QStringLiteral("宠物"), &err));
+    QVERIFY(!m_db->addCategory(expenseType, QStringLiteral("餐饮"), &err));
+    // 空名拒绝
+    QVERIFY(!m_db->addCategory(expenseType, QStringLiteral("   "), &err));
+    // 跨类型同名允许
+    QVERIFY(m_db->addCategory(static_cast<int>(zl::TxType::Income),
+                              QStringLiteral("宠物"), &err));
+
+    QVERIFY(m_db->removeCategory(expenseType, QStringLiteral("宠物"), &err));
+    QVERIFY(!m_db->removeCategory(expenseType, QStringLiteral("宠物"), &err));
+}
+
+void DatabaseTest::categoryDeleteGuards()
+{
+    QString err;
+    const int expenseType = static_cast<int>(zl::TxType::Expense);
+    // 内置分类不可删
+    QVERIFY(!m_db->removeCategory(expenseType, QStringLiteral("餐饮"), &err));
+
+    QVERIFY(m_db->addCategory(expenseType, QStringLiteral("旅行"), &err));
+    // 创建一笔使用该分类的账目
+    zl::Transaction tx = makeTx(zl::TxType::Expense, 1000, QStringLiteral("旅行"), 0);
+    QVERIFY(m_db->insert(&tx, &err));
+    // 已被账目引用，不可删除
+    QVERIFY(!m_db->removeCategory(expenseType, QStringLiteral("旅行"), &err));
+
+    // 删除账目后即可删除分类
+    QVERIFY(m_db->remove(tx.id, &err));
+    QVERIFY(m_db->removeCategory(expenseType, QStringLiteral("旅行"), &err));
 }
 
 QTEST_MAIN(DatabaseTest)
