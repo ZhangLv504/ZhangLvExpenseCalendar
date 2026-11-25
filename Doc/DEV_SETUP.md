@@ -5,7 +5,7 @@
 >
 > - 环境锁定值以 [`Doc/PROJECT_PROGRESS.md`](PROJECT_PROGRESS.md) 第 1 节为准（唯一事实来源）。
 > - 第三方依赖的许可证、来源、ABI 验证登记在 [`third_party/DEPENDENCIES.md`](../third_party/DEPENDENCIES.md)。
-> - 当前版本：**0.2.0 / versionCode 2（M1 已交付）**。
+> - 当前版本：**0.3.0 / versionCode 3（M2 已交付）**。
 > - 最后更新：2026-11-25。
 
 ---

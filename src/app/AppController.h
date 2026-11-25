@@ -22,6 +22,9 @@ class AppController : public QObject
     Q_PROPERTY(QString monthExpenseText READ monthExpenseText NOTIFY summaryChanged)
     Q_PROPERTY(int currentYear READ currentYear WRITE setCurrentYear NOTIFY monthChanged)
     Q_PROPERTY(int currentMonth READ currentMonth WRITE setCurrentMonth NOTIFY monthChanged)
+    Q_PROPERTY(int filterType READ filterType WRITE setFilterType NOTIFY filterChanged)
+    Q_PROPERTY(QString searchKeyword READ searchKeyword WRITE setSearchKeyword NOTIFY filterChanged)
+    Q_PROPERTY(bool filterActive READ filterActive NOTIFY filterChanged)
     Q_PROPERTY(QString dbPath READ dbPath CONSTANT)
 
 public:
@@ -32,10 +35,15 @@ public:
     QString monthExpenseText() const;
     int currentYear() const;
     int currentMonth() const;
+    int filterType() const;          // -1 全部 / 0 支出 / 1 收入
+    QString searchKeyword() const;
+    bool filterActive() const;       // 是否处于筛选状态（列表空态文案区分）
     QString dbPath() const;
 
     void setCurrentYear(int year);
     void setCurrentMonth(int month);
+    void setFilterType(int type);
+    void setSearchKeyword(const QString &keyword);
 
     // 初始化数据库并加载当前月
     Q_INVOKABLE bool initialize(QString *error = nullptr);
@@ -60,6 +68,13 @@ public:
     Q_INVOKABLE QStringList expenseCategories() const;
     Q_INVOKABLE QStringList incomeCategories() const;
 
+    // 月度分类统计（type：0 支出 / 1 收入），返回
+    // [{category, amountText, count, percent}]，percent 为该分类占同类型本月合计的整数百分比。
+    Q_INVOKABLE QVariantList monthCategoryStats(int type) const;
+
+    // 本月指定类型的合计金额（元字符串），供统计页顶部展示。
+    Q_INVOKABLE QString monthTotalText(int type) const;
+
     // 分类管理（写入 SQLite 持久化）
     // categoryDetails 返回 [{name, builtin}]，供管理页标注内置分类不可删
     Q_INVOKABLE QVariantList categoryDetails(int type) const;
@@ -72,6 +87,7 @@ public slots:
 signals:
     void summaryChanged();
     void monthChanged();
+    void filterChanged();
     void categoriesChanged();
     void errorOccurred(const QString &message);
 
@@ -82,6 +98,8 @@ private:
     TransactionModel *m_model;
     int m_year;
     int m_month;
+    int m_filterType;          // -1 全部 / 0 支出 / 1 收入
+    QString m_searchKeyword;
     std::int64_t m_incomeCents;
     std::int64_t m_expenseCents;
 };

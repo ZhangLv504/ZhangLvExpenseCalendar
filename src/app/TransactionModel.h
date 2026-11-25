@@ -12,6 +12,8 @@ class TransactionModel : public QAbstractListModel
 {
     Q_OBJECT
 
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
+
 public:
     enum Roles {
         IdRole = Qt::UserRole + 1,
@@ -34,6 +36,12 @@ public:
 
     // 取出第 row 行账目（供编辑/删除）
     Transaction at(int row) const;
+
+    // 当前行数（QML 空态判断用；QAbstractListModel 本身不暴露 count）
+    int count() const;
+
+signals:
+    void countChanged();
 
 private:
     QVector<Transaction> m_items;

@@ -84,45 +84,74 @@ ApplicationWindow {
                     }
                 }
 
-                Label {
-                    text: qsTr("明细")
-                    font.pixelSize: 14
-                    color: "#888"
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    ComboBox {
+                        id: typeFilter
+                        Layout.preferredWidth: 104
+                        model: [qsTr("全部"), qsTr("支出"), qsTr("收入")]
+                        onActivated: app.filterType = currentIndex - 1
+                    }
+                    TextField {
+                        id: searchField
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("搜索分类或备注")
+                        onTextChanged: app.searchKeyword = text
+                    }
                 }
 
-                ListView {
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("明细")
+                        font.pixelSize: 14
+                        color: "#888"
+                    }
+                    ToolButton {
+                        text: qsTr("分类统计 ›")
+                        onClicked: stack.push(statsPage)
+                    }
+                }
+
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
-                    model: app.model
-                    delegate: ItemDelegate {
-                        width: ListView.view.width
-                        height: 62
-                        onClicked: stack.push(editPage, { isNew: false, row: model.index })
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Label { text: model.category; font.pixelSize: 15 }
-                                Label {
-                                    text: (model.note ? model.note + "  " : "") + model.timeText
-                                    font.pixelSize: 11
-                                    color: "#999"
+                    ListView {
+                        id: transactionList
+                        anchors.fill: parent
+                        clip: true
+                        model: app.model
+                        delegate: ItemDelegate {
+                            width: ListView.view.width
+                            height: 62
+                            onClicked: stack.push(editPage, { isNew: false, row: model.index })
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: model.category; font.pixelSize: 15 }
+                                    Label {
+                                        text: (model.note ? model.note + "  " : "") + model.timeText
+                                        font.pixelSize: 11
+                                        color: "#999"
+                                    }
                                 }
-                            }
-                            Label {
-                                text: (model.txType === 1 ? "+" : "-") + model.amountText
-                                color: model.txType === 1 ? "#C62828" : "#2E7D32"
-                                font.pixelSize: 16
-                                font.bold: true
+                                Label {
+                                    text: (model.txType === 1 ? "+" : "-") + model.amountText
+                                    color: model.txType === 1 ? "#C62828" : "#2E7D32"
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                }
                             }
                         }
                     }
                     Label {
                         anchors.centerIn: parent
                         visible: app.model.count === 0
-                        text: qsTr("本月还没有账目")
+                        text: app.filterActive ? qsTr("没有符合条件的账目") : qsTr("本月还没有账目")
                         color: "#AAA"
                     }
                 }
@@ -443,6 +472,152 @@ ApplicationWindow {
                     visible: text.length > 0
                 }
             }
+        }
+    }
+
+    // 月度分类统计页
+    Component {
+        id: statsPage
+        Page {
+            property int statsType: 0
+
+            function reload() {
+                var details = app.monthCategoryStats(statsType);
+                statsModel.clear();
+                var cnt = 0;
+                for (var i = 0; i < details.length; ++i) {
+                    statsModel.append({
+                        category: details[i].category,
+                        amountText: details[i].amountText,
+                        count: details[i].count,
+                        percent: details[i].percent
+                    });
+                    cnt += details[i].count;
+                }
+                totalLabel.text = app.monthTotalText(statsType);
+                countLabel.text = qsTr("共 ") + cnt + qsTr(" 笔");
+            }
+
+            header: ToolBar {
+                RowLayout {
+                    anchors.fill: parent
+                    ToolButton {
+                        text: qsTr("‹ 返回")
+                        onClicked: stack.pop()
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Qt.AlignHCenter
+                        text: qsTr("分类统计")
+                        font.pixelSize: 18
+                        font.bold: true
+                    }
+                }
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    ButtonGroup { id: statsTypeGroup }
+                    RadioButton {
+                        text: qsTr("支出统计")
+                        checked: true
+                        ButtonGroup.group: statsTypeGroup
+                        onCheckedChanged: if (checked) { statsType = 0; reload() }
+                    }
+                    RadioButton {
+                        text: qsTr("收入统计")
+                        ButtonGroup.group: statsTypeGroup
+                        onCheckedChanged: if (checked) { statsType = 1; reload() }
+                    }
+                }
+
+                Label {
+                    text: app.currentYear + qsTr("年") + app.currentMonth + qsTr("月")
+                    color: "#888"
+                    font.pixelSize: 13
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        id: totalLabel
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: statsType === 1 ? "#C62828" : "#2E7D32"
+                    }
+                    Label {
+                        id: countLabel
+                        color: "#999"
+                        font.pixelSize: 12
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    ListView {
+                        id: statsList
+                        anchors.fill: parent
+                        clip: true
+                        model: ListModel { id: statsModel }
+                        delegate: ColumnLayout {
+                            width: ListView.view.width
+                            spacing: 4
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: model.category
+                                    font.pixelSize: 15
+                                }
+                                Label {
+                                    text: model.count + qsTr(" 笔")
+                                    color: "#999"
+                                    font.pixelSize: 12
+                                }
+                                Label {
+                                    text: model.amountText
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    color: statsType === 1 ? "#C62828" : "#2E7D32"
+                                }
+                                Label {
+                                    Layout.preferredWidth: 44
+                                    horizontalAlignment: Qt.AlignRight
+                                    text: model.percent + "%"
+                                    color: "#999"
+                                    font.pixelSize: 12
+                                }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 6
+                                radius: 3
+                                color: "#EEEEEE"
+                                Rectangle {
+                                    width: parent.width * Math.min(100, model.percent) / 100
+                                    height: parent.height
+                                    radius: 3
+                                    color: statsType === 1 ? "#EF9A9A" : "#A5D6A7"
+                                }
+                            }
+                        }
+                    }
+                    Label {
+                        anchors.centerIn: parent
+                        visible: statsModel.count === 0
+                        text: qsTr("本月暂无可统计的数据")
+                        color: "#AAA"
+                    }
+                }
+            }
+
+            Component.onCompleted: reload()
         }
     }
 }

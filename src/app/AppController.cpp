@@ -16,6 +16,7 @@ AppController::AppController(Database *db, QObject *parent)
     , m_model(new TransactionModel(this))
     , m_year(QDate::currentDate().year())
     , m_month(QDate::currentDate().month())
+    , m_filterType(-1)
     , m_incomeCents(0)
     , m_expenseCents(0)
 {
@@ -26,6 +27,12 @@ QString AppController::monthIncomeText() const { return Money::format(m_incomeCe
 QString AppController::monthExpenseText() const { return Money::format(m_expenseCents); }
 int AppController::currentYear() const { return m_year; }
 int AppController::currentMonth() const { return m_month; }
+int AppController::filterType() const { return m_filterType; }
+QString AppController::searchKeyword() const { return m_searchKeyword; }
+bool AppController::filterActive() const
+{
+    return m_filterType != -1 || !m_searchKeyword.trimmed().isEmpty();
+}
 QString AppController::dbPath() const { return m_db ? m_db->path() : QString(); }
 
 void AppController::setCurrentYear(int year)
@@ -41,6 +48,23 @@ void AppController::setCurrentMonth(int month)
     if (month < 1 || month > 12 || m_month == month) return;
     m_month = month;
     emit monthChanged();
+    reloadCurrentMonth();
+}
+
+void AppController::setFilterType(int type)
+{
+    const int normalized = (type == 0 || type == 1) ? type : -1;
+    if (m_filterType == normalized) return;
+    m_filterType = normalized;
+    emit filterChanged();
+    reloadCurrentMonth();
+}
+
+void AppController::setSearchKeyword(const QString &keyword)
+{
+    if (m_searchKeyword == keyword) return;
+    m_searchKeyword = keyword;
+    emit filterChanged();
     reloadCurrentMonth();
 }
 
@@ -169,6 +193,37 @@ QStringList AppController::incomeCategories() const
     return list;
 }
 
+QVariantList AppController::monthCategoryStats(int type) const
+{
+    QVariantList list;
+    if (!m_db || !m_db->isOpen())
+        return list;
+
+    const QVector<CategoryStat> stats = m_db->monthCategoryStats(m_year, m_month, type, nullptr);
+    std::int64_t total = 0;
+    for (const CategoryStat &s : stats)
+        total += s.totalCents;
+
+    for (const CategoryStat &s : stats) {
+        // 占比只用于展示，非金额；整数四舍五入
+        const int percent = total > 0
+            ? static_cast<int>((s.totalCents * 100 + total / 2) / total)
+            : 0;
+        QVariantMap m;
+        m.insert(QStringLiteral("category"), s.category);
+        m.insert(QStringLiteral("amountText"), Money::format(s.totalCents));
+        m.insert(QStringLiteral("count"), s.count);
+        m.insert(QStringLiteral("percent"), percent);
+        list.append(m);
+    }
+    return list;
+}
+
+QString AppController::monthTotalText(int type) const
+{
+    return Money::format(type == static_cast<int>(TxType::Income) ? m_incomeCents : m_expenseCents);
+}
+
 QVariantList AppController::categoryDetails(int type) const
 {
     QVariantList list;
@@ -221,7 +276,8 @@ void AppController::reloadCurrentMonth()
         return;
 
     QString error;
-    const QVector<Transaction> items = m_db->queryByMonth(m_year, m_month, &error);
+    const QVector<Transaction> items = m_db->queryByMonthFiltered(
+        m_year, m_month, m_filterType, QString(), m_searchKeyword, &error);
     if (!error.isEmpty())
         emit errorOccurred(error);
     m_model->setTransactions(items);

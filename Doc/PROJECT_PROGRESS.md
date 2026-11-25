@@ -7,9 +7,9 @@
 
 | 项         | 当前值                                                       |
 | ---------- | ------------------------------------------------------------ |
-| 当前里程碑 | **M1 — 已交付**                                              |
-| 当前版本   | `0.2.0`（versionCode 2）                                     |
-| 下一步动作 | 进入 M2：搜索筛选、预算、CSV 导出与备份（正式签名仍在 M5 前落地；真机操作先遵守第 1.1 节安全契约） |
+| 当前里程碑 | **M2 — 已交付**                                              |
+| 当前版本   | `0.3.0`（versionCode 3）                                     |
+| 下一步动作 | 进入 M3：CSV 导出与备份（Android SAF）；真机操作先遵守第 1.1 节安全契约 |
 
 ## 1. 环境契约（锁定）
 
@@ -39,7 +39,10 @@
 | ------ | ------------------------------------------------------- | ------ |
 | M0     | 工程骨架、基础页面导航、SQLite 初始化、Android 打包链路 | 已交付 |
 | M1     | 核心记账闭环（增删改查、分类、明细列表、本地持久化）    | 已交付（0.2.0） |
-| M2+    | 搜索筛选、预算、CSV 导出与备份等（按需迭代）            | 未开始 |
+| M2     | 明细搜索筛选、月度分类统计                              | 已交付（0.3.0） |
+| M3     | CSV 导出与备份（Android SAF）                            | 未开始 |
+| M4     | 预算与更多统计维度                                      | 未开始 |
+| M5     | 正式签名与发布打磨                                      | 未开始 |
 
 > 说明：M0 搭建骨架时已将核心记账闭环一并实现；0.2.0 补齐 M1 收尾项——分类持久化与自定义管理、
 > 编辑页删除入口（确认页）、日期时间手工录入，并在模拟器完成三条链路的交互验收。
@@ -55,12 +58,12 @@ ZhangLvExpense/
 │   │   ├── DateTimeUtil.{h,cpp}# "yyyy-MM-dd HH:mm" 解析/格式化，毫秒时间戳流转
 │   │   ├── Transaction.{h,cpp}  # 账目模型 + 合法性校验
 │   │   ├── Category.{h,cpp}     # 内置收支分类（首次打开播种进 SQLite）
-│   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/月度汇总/分类 CRUD，写操作全部事务
+│   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/筛选查询/月度汇总/分类汇总与 CRUD
 │   └── app/
 │       ├── main.cpp             # 入口：Basic 样式、应用私有目录建库、注册 QML 上下文
-│       ├── AppController.{h,cpp}# QML 桥接：金额以元字符串进出，内部转分；分类管理；日期时间
-│       ├── TransactionModel.*   # QAbstractListModel，供 ListView 绑定
-│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、明细、记一笔/编辑、删除确认、分类管理
+│       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选状态、分类管理、日期时间、统计
+│       ├── TransactionModel.*   # QAbstractListModel（含 count 属性），供 ListView 绑定
+│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计
 ├── tests/                       # tst_money / tst_database / tst_datetime（Qt Test）
 ├── scripts/device.sh            # 真机/模拟器安全操作封装（白名单；ui 动作仅限 emulator-*）
 ├── android/                     # Android 打包模板（manifest 竖屏、包名、gradle）
@@ -75,7 +78,28 @@ ZhangLvExpense/
 
 ## 4. 验收结果
 
-### 4.1 M1 / 0.2.0（当前）
+### 4.1 M2 / 0.3.0（当前）
+
+#### 桌面单测（mingw_64，Qt Test）
+- `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
+- `tst_database`：17 项通过（在 M1 基础上新增类型/分类/关键字组合筛选、LIKE 通配符转义、月度分类汇总与跨月归属）
+- `tst_datetime`：17 项通过（合法/非法格式、空串、往返转换、跨月跨年、闰年 2/29）
+- CTest：`100% tests passed, 0 tests failed out of 3`（合计 65 项）
+
+#### Android 构建
+- arm64-v8a：Release + debug 签名侧载包 `dist/zhanglv-expense-0.3.0-arm64-v8a-debug.apk`（约 19.3 MiB，SHA-256 见 dist/README.md）
+- x86_64：Debug，模拟器验收包（`build-android-x86_64`）
+- aapt 校验：包名 `com.zhanglv.expense` / versionCode 3 / versionName 0.3.0 / minSdk 26 / targetSdk 34 / 竖屏 / arm64-v8a；apksigner 校验签名有效（Android Debug 证书）
+
+#### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
+- 类型筛选：选「支出」仅显示 2 条支出、选「收入」仅显示 1 条收入；顶部月度汇总不受筛选影响
+- 关键字搜索：`lunch` 命中备注仅剩餐饮 1 条；无结果时显示「没有符合条件的账目」
+- 分类统计页：支出合计 30.00 / 共 2 笔，餐饮 20.00（67%）、交通 10.00（33%）；收入合计 5000.00 / 共 1 笔，工资 100%
+- 交互回归：记一笔（支出/收入切换、分类选择、备注）、编辑页回填、删除确认页闭环均正常
+- 缺陷修复：空态文案被列表内容层遮挡（0.2.0 遗留，`app.model.count` 在 QAbstractListModel 上不存在）；为 TransactionModel 补 `count` 属性，并将空态标签改为列表容器内的独立叠加层，验证通过
+- logcat 无 QML 错误/FATAL
+
+### 4.2 M1 / 0.2.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -97,7 +121,7 @@ ZhangLvExpense/
 - 持久化：新增账目 5.00 与自定义分类 PersistCat 后 force-stop 重启，账目与分类均保留（SQLite 真实落盘）
 - 自动化工具：`scripts/device.sh` 新增 `start/stop/shot/ui`；`ui`（tap/swipe/text/key）硬校验设备序列号为 `emulator-*`，真机一律拒绝
 
-### 4.2 M0 / 0.1.0（历史）
+### 4.3 M0 / 0.1.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -116,12 +140,13 @@ ZhangLvExpense/
 - 持久化：force-stop 后重启，账目仍在（SQLite 真实落盘）
 - 非法金额（格式错误）被拒绝并提示，不落库
 
-### 4.3 已知限制
+### 4.4 已知限制
 - 模拟器 SwiftShader 软件渲染下，部分 Qt Quick Controls 控件（ToolBar/Button/ComboBox 背景）出现梯形斜切视觉瑕疵；属模拟器图形栈渲染问题，arm64 真机交付包不受影响。
 - 应用使用 Basic 样式以保证低配设备渲染稳定。
 - 正式签名未接入（当前 debug 签名，仅侧载验证），按约定在 M5 前落地。
 
 ## 5. 变更日志
 
+- **M2 / 0.3.0（2026-11-25）**：明细页新增类型筛选与关键字搜索（分类/备注，LIKE 通配符转义）；新增月度分类统计页（按分类汇总、笔数、占比条）；修复空态文案不显示的遗留缺陷（TransactionModel 补 count、空态独立叠加层）；桌面 65 项单测 + 模拟器筛选/统计/交互回归通过。
 - **M1 / 0.2.0（2026-11-25）**：分类持久化（`categories` 表 + 内置播种 + 自定义增删与删除守卫）；新增 DateTimeUtil 支持记一笔/编辑时手工录入日期时间；编辑页补删除入口与独立确认页；`scripts/device.sh` 增加模拟器 UI 自动化（仅 emulator-*）；桌面 62 项单测 + 模拟器三条链路验收通过。
 - **M0 / 0.1.0（2026-11-25）**：搭建 Qt 6.8.3 + QML + C++17 + CMake + SQLite 工程骨架；实现 int64_t 分金额引擎与事务化 SQLite 核心层；完成竖屏记账 UI 闭环与双 ABI 打包链路；桌面 42 项单测 + 模拟器验收通过。

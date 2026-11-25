@@ -59,6 +59,7 @@ void TransactionModel::setTransactions(const QVector<Transaction> &items)
     beginResetModel();
     m_items = items;
     endResetModel();
+    emit countChanged();
 }
 
 Transaction TransactionModel::at(int row) const
@@ -66,6 +67,11 @@ Transaction TransactionModel::at(int row) const
     if (row < 0 || row >= m_items.size())
         return Transaction();
     return m_items.at(row);
+}
+
+int TransactionModel::count() const
+{
+    return m_items.size();
 }
 
 } // namespace zl

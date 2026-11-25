@@ -26,6 +26,9 @@ private slots:
     void categorySeed();           // 内置分类播种
     void categoryCustomCrud();     // 自定义分类增删与重名拒绝
     void categoryDeleteGuards();   // 内置/被引用分类不可删
+    void filterCombinations();     // 类型/分类/关键字/组合筛选
+    void filterKeywordEscapes();   // LIKE 通配符转义
+    void monthCategoryStats();     // 月度分类汇总
 
 private:
     QTemporaryDir m_dir;
@@ -266,6 +269,162 @@ void DatabaseTest::categoryDeleteGuards()
     // 删除账目后即可删除分类
     QVERIFY(m_db->remove(tx.id, &err));
     QVERIFY(m_db->removeCategory(expenseType, QStringLiteral("旅行"), &err));
+}
+
+void DatabaseTest::filterCombinations()
+{
+    zl::Database db(m_dir.filePath(QStringLiteral("filter.sqlite")));
+    QString err;
+    QVERIFY2(db.open(&err), qPrintable(err));
+
+    const qint64 t1 = QDateTime(QDate(2027, 3, 10), QTime(9, 0, 0)).toMSecsSinceEpoch();
+    const qint64 t2 = QDateTime(QDate(2027, 3, 20), QTime(18, 30, 0)).toMSecsSinceEpoch();
+    const qint64 tOut = QDateTime(QDate(2027, 4, 1), QTime(0, 0, 0)).toMSecsSinceEpoch();
+
+    const auto add = [&db, &err](zl::TxType type, qint64 cents, const QString &category,
+                                 const QString &note, qint64 createdMs) {
+        zl::Transaction tx;
+        tx.type = type;
+        tx.amountCents = cents;
+        tx.category = category;
+        tx.note = note;
+        tx.createdMs = createdMs;
+        return db.insert(&tx, &err);
+    };
+
+    QVERIFY(add(zl::TxType::Expense, 1200, QStringLiteral("餐饮"),
+                QStringLiteral("午餐 面条"), t1));
+    QVERIFY(add(zl::TxType::Expense, 800, QStringLiteral("交通"),
+                QStringLiteral("地铁通勤"), t2));
+    QVERIFY(add(zl::TxType::Income, 100000, QStringLiteral("工资"),
+                QStringLiteral("三月工资"), t1));
+    QVERIFY(add(zl::TxType::Expense, 999, QStringLiteral("餐饮"),
+                QStringLiteral("跨月记录"), tOut));
+
+    // 类型筛选：0 支出 / 1 收入 / -1 全部
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, 0, QString(), QString(), &err).size(), 2);
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, 1, QString(), QString(), &err).size(), 1);
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, -1, QString(), QString(), &err).size(), 3);
+
+    // 分类筛选
+    const QVector<zl::Transaction> food =
+        db.queryByMonthFiltered(2027, 3, -1, QStringLiteral("餐饮"), QString(), &err);
+    QCOMPARE(food.size(), 1);
+    QCOMPARE(food.first().note, QStringLiteral("午餐 面条"));
+
+    // 类型 + 分类组合
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, 1, QStringLiteral("餐饮"), QString(), &err).size(), 0);
+
+    // 关键字命中备注 / 命中分类 / 与类型组合
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, -1, QString(),
+                                     QStringLiteral("地铁"), &err).size(), 1);
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, -1, QString(),
+                                     QStringLiteral("工资"), &err).size(), 1);
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, 0, QString(),
+                                     QStringLiteral("工资"), &err).size(), 0);
+    // 空关键字（含纯空格）不过滤
+    QCOMPARE(db.queryByMonthFiltered(2027, 3, -1, QString(),
+                                     QStringLiteral("   "), &err).size(), 3);
+    // 无命中
+    QVERIFY(db.queryByMonthFiltered(2027, 3, -1, QString(),
+                                    QStringLiteral("不存在"), &err).isEmpty());
+}
+
+void DatabaseTest::filterKeywordEscapes()
+{
+    zl::Database db(m_dir.filePath(QStringLiteral("like.sqlite")));
+    QString err;
+    QVERIFY2(db.open(&err), qPrintable(err));
+
+    const qint64 t = QDateTime(QDate(2027, 5, 8), QTime(12, 0, 0)).toMSecsSinceEpoch();
+    const auto add = [&db, &err, t](const QString &note) {
+        zl::Transaction tx;
+        tx.type = zl::TxType::Expense;
+        tx.amountCents = 100;
+        tx.category = QStringLiteral("其他");
+        tx.note = note;
+        tx.createdMs = t;
+        return db.insert(&tx, &err);
+    };
+    QVERIFY(add(QStringLiteral("折扣 100%")));
+    QVERIFY(add(QStringLiteral("折扣 100 元")));
+    QVERIFY(add(QStringLiteral("a_b")));
+    QVERIFY(add(QStringLiteral("axb")));
+    QVERIFY(add(QStringLiteral("反斜杠 \\ 测试")));
+
+    // "%" 只匹配包含字面百分号的记录，不能变成“匹配全部”
+    const QVector<zl::Transaction> percent =
+        db.queryByMonthFiltered(2027, 5, -1, QString(), QStringLiteral("%"), &err);
+    QCOMPARE(percent.size(), 1);
+    QCOMPARE(percent.first().note, QStringLiteral("折扣 100%"));
+
+    // "_" 只匹配包含字面下划线的记录
+    const QVector<zl::Transaction> underscore =
+        db.queryByMonthFiltered(2027, 5, -1, QString(), QStringLiteral("_"), &err);
+    QCOMPARE(underscore.size(), 1);
+    QCOMPARE(underscore.first().note, QStringLiteral("a_b"));
+
+    // 反斜杠同样按字面匹配
+    QCOMPARE(db.queryByMonthFiltered(2027, 5, -1, QString(),
+                                     QStringLiteral("\\"), &err).size(), 1);
+}
+
+void DatabaseTest::monthCategoryStats()
+{
+    zl::Database db(m_dir.filePath(QStringLiteral("stats.sqlite")));
+    QString err;
+    QVERIFY2(db.open(&err), qPrintable(err));
+
+    const qint64 t1 = QDateTime(QDate(2027, 4, 5), QTime(10, 0, 0)).toMSecsSinceEpoch();
+    const qint64 t2 = QDateTime(QDate(2027, 4, 25), QTime(20, 0, 0)).toMSecsSinceEpoch();
+    const qint64 tMay = QDateTime(QDate(2027, 5, 2), QTime(9, 0, 0)).toMSecsSinceEpoch();
+
+    const auto add = [&db, &err](zl::TxType type, qint64 cents, const QString &category,
+                                 qint64 createdMs) {
+        zl::Transaction tx;
+        tx.type = type;
+        tx.amountCents = cents;
+        tx.category = category;
+        tx.note = QStringLiteral("统计");
+        tx.createdMs = createdMs;
+        return db.insert(&tx, &err);
+    };
+    QVERIFY(add(zl::TxType::Expense, 1000, QStringLiteral("餐饮"), t1));
+    QVERIFY(add(zl::TxType::Expense, 500, QStringLiteral("餐饮"), t2));
+    QVERIFY(add(zl::TxType::Expense, 2000, QStringLiteral("交通"), t1));
+    QVERIFY(add(zl::TxType::Income, 99999, QStringLiteral("工资"), t1));
+    QVERIFY(add(zl::TxType::Expense, 700, QStringLiteral("餐饮"), tMay));
+
+    const QVector<zl::CategoryStat> expenses =
+        db.monthCategoryStats(2027, 4, static_cast<int>(zl::TxType::Expense), &err);
+    QCOMPARE(expenses.size(), 2);
+    // 金额降序：交通 2000 在餐饮 1500 前；餐饮两笔合并
+    QCOMPARE(expenses.at(0).category, QStringLiteral("交通"));
+    QCOMPARE(expenses.at(0).totalCents, qint64(2000));
+    QCOMPARE(expenses.at(0).count, 1);
+    QCOMPARE(expenses.at(1).category, QStringLiteral("餐饮"));
+    QCOMPARE(expenses.at(1).totalCents, qint64(1500));
+    QCOMPARE(expenses.at(1).count, 2);
+
+    const QVector<zl::CategoryStat> incomes =
+        db.monthCategoryStats(2027, 4, static_cast<int>(zl::TxType::Income), &err);
+    QCOMPARE(incomes.size(), 1);
+    QCOMPARE(incomes.first().category, QStringLiteral("工资"));
+    QCOMPARE(incomes.first().totalCents, qint64(99999));
+
+    // 跨月归属：5 月只统计 5 月的 700
+    const QVector<zl::CategoryStat> may =
+        db.monthCategoryStats(2027, 5, static_cast<int>(zl::TxType::Expense), &err);
+    QCOMPARE(may.size(), 1);
+    QCOMPARE(may.first().totalCents, qint64(700));
+
+    // 空月份
+    QVERIFY(db.monthCategoryStats(2020, 1, static_cast<int>(zl::TxType::Expense), &err).isEmpty());
+
+    // 非法类型
+    err.clear();
+    QVERIFY(db.monthCategoryStats(2027, 4, 5, &err).isEmpty());
+    QVERIFY(!err.isEmpty());
 }
 
 QTEST_MAIN(DatabaseTest)

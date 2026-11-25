@@ -30,6 +30,19 @@ QString lastError(const QSqlQuery &q, const QString &fallback)
     return e.type() == QSqlError::NoError ? fallback : e.text();
 }
 
+// 转义 LIKE 通配符，配合 SQL 中的 ESCAPE '\' 使用
+QString escapeLike(const QString &raw)
+{
+    QString out;
+    out.reserve(raw.size() + 8);
+    for (const QChar ch : raw) {
+        if (ch == QLatin1Char('\\') || ch == QLatin1Char('%') || ch == QLatin1Char('_'))
+            out.append(QLatin1Char('\\'));
+        out.append(ch);
+    }
+    return out;
+}
+
 } // namespace
 
 class Database::Private {
@@ -341,6 +354,14 @@ bool Database::get(std::int64_t id, Transaction *out, QString *error) const
 
 QVector<Transaction> Database::queryByMonth(int year, int month, QString *error) const
 {
+    return queryByMonthFiltered(year, month, -1, QString(), QString(), error);
+}
+
+QVector<Transaction> Database::queryByMonthFiltered(int year, int month, int type,
+                                                    const QString &category,
+                                                    const QString &keyword,
+                                                    QString *error) const
+{
     QVector<Transaction> result;
     QSqlDatabase db = d->database();
     if (!db.isOpen()) {
@@ -357,13 +378,37 @@ QVector<Transaction> Database::queryByMonth(int year, int month, QString *error)
     const std::int64_t startMs = QDateTime(start, QTime(0, 0, 0)).toMSecsSinceEpoch();
     const std::int64_t endMs = QDateTime(end, QTime(0, 0, 0)).toMSecsSinceEpoch();
 
-    QSqlQuery q(db);
-    q.prepare(QStringLiteral(
+    QString sql = QStringLiteral(
         "SELECT id, type, amount_cents, category, note, created_ms "
-        "FROM transactions WHERE created_ms >= ? AND created_ms < ? "
-        "ORDER BY created_ms DESC, id DESC"));
-    q.addBindValue(QVariant::fromValue(startMs));
-    q.addBindValue(QVariant::fromValue(endMs));
+        "FROM transactions WHERE created_ms >= ? AND created_ms < ?");
+    QVariantList binds;
+    binds << QVariant::fromValue(startMs) << QVariant::fromValue(endMs);
+
+    if (type == static_cast<int>(TxType::Expense) || type == static_cast<int>(TxType::Income)) {
+        sql += QStringLiteral(" AND type = ?");
+        binds << type;
+    }
+
+    const QString cat = category.trimmed();
+    if (!cat.isEmpty()) {
+        sql += QStringLiteral(" AND category = ?");
+        binds << cat;
+    }
+
+    const QString kw = keyword.trimmed();
+    if (!kw.isEmpty()) {
+        sql += QStringLiteral(
+            " AND (category LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\')");
+        const QString pattern = QStringLiteral("%") + escapeLike(kw) + QStringLiteral("%");
+        binds << pattern << pattern;
+    }
+
+    sql += QStringLiteral(" ORDER BY created_ms DESC, id DESC");
+
+    QSqlQuery q(db);
+    q.prepare(sql);
+    for (const QVariant &v : binds)
+        q.addBindValue(v);
     if (!q.exec()) {
         if (error) *error = lastError(q, QStringLiteral("查询失败"));
         return result;
@@ -420,6 +465,51 @@ MonthSummary Database::monthSummary(int year, int month, QString *error) const
             summary.expenseCents += sum;
     }
     return summary;
+}
+
+QVector<CategoryStat> Database::monthCategoryStats(int year, int month, int type,
+                                                  QString *error) const
+{
+    QVector<CategoryStat> result;
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return result;
+    }
+    if (type != static_cast<int>(TxType::Expense) && type != static_cast<int>(TxType::Income)) {
+        if (error) *error = QStringLiteral("无效的收支类型");
+        return result;
+    }
+
+    const QDate start(year, month, 1);
+    if (!start.isValid()) {
+        if (error) *error = QStringLiteral("无效的年月");
+        return result;
+    }
+    const QDate end = start.addMonths(1);
+    const std::int64_t startMs = QDateTime(start, QTime(0, 0, 0)).toMSecsSinceEpoch();
+    const std::int64_t endMs = QDateTime(end, QTime(0, 0, 0)).toMSecsSinceEpoch();
+
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "SELECT category, SUM(amount_cents), COUNT(*) FROM transactions "
+        "WHERE created_ms >= ? AND created_ms < ? AND type = ? "
+        "GROUP BY category ORDER BY SUM(amount_cents) DESC, category ASC"));
+    q.addBindValue(QVariant::fromValue(startMs));
+    q.addBindValue(QVariant::fromValue(endMs));
+    q.addBindValue(type);
+    if (!q.exec()) {
+        if (error) *error = lastError(q, QStringLiteral("分类汇总失败"));
+        return result;
+    }
+    while (q.next()) {
+        CategoryStat stat;
+        stat.category = q.value(0).toString();
+        stat.totalCents = q.value(1).toLongLong();
+        stat.count = q.value(2).toInt();
+        result.append(stat);
+    }
+    return result;
 }
 
 int Database::count(QString *error) const

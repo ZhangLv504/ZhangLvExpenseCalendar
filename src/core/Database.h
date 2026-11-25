@@ -24,6 +24,13 @@ struct CategoryRecord {
     bool builtin = false;
 };
 
+// 分类月度汇总条目（单位：分）
+struct CategoryStat {
+    QString category;
+    std::int64_t totalCents = 0;
+    int count = 0;
+};
+
 // 单一账本的 SQLite 存储引擎。
 // 线程约定：实例只在创建它的线程使用；写操作全部包裹在事务中，失败自动回滚。
 class Database final {
@@ -55,8 +62,19 @@ public:
     // 查询指定年月的全部账目（按本地时间月初到月末），按时间倒序。
     QVector<Transaction> queryByMonth(int year, int month, QString *error = nullptr) const;
 
+    // 带筛选的月度查询：type 取 -1 表示全部类型；category 为空表示不限分类；
+    // keyword 非空时在分类与备注中做包含匹配（内部转义 LIKE 通配符）。按时间倒序。
+    QVector<Transaction> queryByMonthFiltered(int year, int month, int type,
+                                              const QString &category,
+                                              const QString &keyword,
+                                              QString *error = nullptr) const;
+
     // 指定年月收支汇总。
     MonthSummary monthSummary(int year, int month, QString *error = nullptr) const;
+
+    // 指定年月、指定类型的分类汇总，按合计金额降序（金额相同按分类名升序）。
+    QVector<CategoryStat> monthCategoryStats(int year, int month, int type,
+                                             QString *error = nullptr) const;
 
     // 全部账目条数。
     int count(QString *error = nullptr) const;
