@@ -27,7 +27,7 @@
 | OpenSSL for Android             | `E:\Software\Android\Sdk\android_openssl`        | Qt Creator 检测绿勾；本应用纯离线，运行期不依赖            |
 | minSdk / targetSdk / compileSdk | 26 / 34 / 35                                     | 与 Qt 6.8.3 Android 模板保持一致                           |
 | 包名 / 方向 / 语言              | `com.zhanglv.expense` / 竖屏 / 简体中文          | 首次发版后包名不可变更                                     |
-| 验收设备                        | AVD `kge_api35`（Pixel 6 / Android 15 / x86_64） | 复用既有 AVD，WHPX 加速可用                                |
+| 验收设备                        | Android 15 模拟器（Pixel 6 / x86_64）            | 使用本机既有 x86_64 AVD，WHPX 加速可用                     |
 | 签名                            | Android Debug key                                | 交付包仅侧载验证；正式签名在 M5 前落地                     |
 | ABI 策略                        | 交付 arm64-v8a，验收 x86_64                      | 两套构建目录分开，单一 APK 无法兼顾                        |
 

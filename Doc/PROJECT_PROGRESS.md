@@ -21,12 +21,12 @@
 | JDK                             | `21.0.12.1`（`D:\AiSoftware\jdk-21.0.12.1`）                 |
 | minSdk / targetSdk / compileSdk | `26 / 34 / 35`                                               |
 | 包名 / 方向 / 语言              | `com.zhanglv.expense` / 竖屏 / 简体中文                      |
-| ABI / 验收设备                  | 交付 `arm64-v8a`；验收 `x86_64`（AVD `kge_api35`，`-gpu swiftshader`） |
+| ABI / 验收设备                  | 交付 `arm64-v8a`；验收 `x86_64`（Android 15 模拟器，`-gpu swiftshader`） |
 
 ### 1.1 真机操作安全契约（硬约束）
 
 > 完整红线见 [`Doc/DEVICE_SAFETY.md`](DEVICE_SAFETY.md)，AI 会话约定见 [`Doc/AGENTS.md`](AGENTS.md)。
-> 包名基准唯一：`com.zhanglv.expense`（用户规范中曾写作 `com.zhanglv.kge`，经确认以本项目值为准）。
+> 包名基准唯一：`com.zhanglv.expense`。
 
 - 只允许只读或应用沙箱内操作；`fastboot`、解锁 Bootloader、刷 Recovery/ROM、Root、`pm clear`（非本应用）、`rm -rf`、恢复出厂、`sideload`、改系统分区/`settings put` **绝对禁止**。
 - 安装/卸载统一走 `scripts/device.sh`（白名单 + 设备唯一性 + 包名校验 + 卸载前后核对），禁止手写 adb 绕过。
@@ -80,7 +80,7 @@ ZhangLvExpense/
 - x86_64：Debug，模拟器验收包
 - aapt 校验：包名 `com.zhanglv.expense` / versionCode 1 / versionName 0.1.0 / minSdk 26 / targetSdk 34 / 应用名「掌律记账」/ 竖屏 / 对应 ABI
 
-### 模拟器验收（AVD kge_api35, Android 15, x86_64, -gpu swiftshader）
+### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
 - 冷启动无崩溃，Qt/QML 加载正常，无运行时错误
 - UI：月度导航、收支汇总卡、明细列表、记一笔按钮正常渲染
 - 闭环：记一笔「支出 餐饮 12.34」→ 保存返回 → 支出汇总更新为 12.34、明细出现 -12.34
