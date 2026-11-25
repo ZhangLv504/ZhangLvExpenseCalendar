@@ -9,7 +9,7 @@
 | ---------- | ------------------------------------------------------------ |
 | 当前里程碑 | **M0 — 已交付**                                              |
 | 当前版本   | `0.1.0`（versionCode 1）                                     |
-| 下一步动作 | 进入 M1 收尾：分类自定义、明细编辑/删除交互打磨与边界回归       |
+| 下一步动作 | 进入 M1 收尾：分类自定义、明细编辑/删除交互打磨与边界回归（真机操作先遵守第 1.1 节安全契约） |
 
 ## 1. 环境契约（锁定）
 
@@ -22,6 +22,16 @@
 | minSdk / targetSdk / compileSdk | `26 / 34 / 35`                                               |
 | 包名 / 方向 / 语言              | `com.zhanglv.expense` / 竖屏 / 简体中文                      |
 | ABI / 验收设备                  | 交付 `arm64-v8a`；验收 `x86_64`（AVD `kge_api35`，`-gpu swiftshader`） |
+
+### 1.1 真机操作安全契约（硬约束）
+
+> 完整红线见 [`Doc/DEVICE_SAFETY.md`](DEVICE_SAFETY.md)，AI 会话约定见 [`Doc/AGENTS.md`](AGENTS.md)。
+> 包名基准唯一：`com.zhanglv.expense`（用户规范中曾写作 `com.zhanglv.kge`，经确认以本项目值为准）。
+
+- 只允许只读或应用沙箱内操作；`fastboot`、解锁 Bootloader、刷 Recovery/ROM、Root、`pm clear`（非本应用）、`rm -rf`、恢复出厂、`sideload`、改系统分区/`settings put` **绝对禁止**。
+- 安装/卸载统一走 `scripts/device.sh`（白名单 + 设备唯一性 + 包名校验 + 卸载前后核对），禁止手写 adb 绕过。
+- 用户手机只需开「USB 调试」并点一次「允许」；验证完卸载本应用即完全还原，不残留系统改动。
+- 已验证：危险命令经白名单全部拦截，`fastboot`/`pm clear`/`rm`/`root`/`sideload`/`settings put`/`install -d`/`am broadcast` 均被拒绝；包名与 ABI 校验分支正确。
 
 ## 2. 里程碑规划（由 Agent 细化并追踪）
 

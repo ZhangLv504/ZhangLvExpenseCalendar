@@ -32,3 +32,12 @@
    - **交付 APK 不入库**：APK 只在本机 `dist/` 留备份，文件名带版本号、禁止覆盖旧版；仓库只提交 `dist/README.md` 版本清单（含 SHA-256 与标签），`.gitignore` 已忽略 `dist/*` 与 `*.apk`。
    - 每次提交新版本时同步做三件事：① 在 `dist/README.md` 追加一行（版本 / versionCode / ABI / SHA-256 / 标签）；② 打附注标签 `git tag -a v<version> -m "<里程碑>: <说明>"`；③ 推送时用 `git push origin main --follow-tags`。
    - 验收未通过（编译失败、崩溃、数据丢失、假功能）时**不得**提交为里程碑完成，只允许提交带 `wip:` 前缀的中间态且必须在提交信息里写明未通过项。
+
+## 真机操作安全红线（绝对硬约束）
+
+> 详见 [`Doc/DEVICE_SAFETY.md`](DEVICE_SAFETY.md)。**任何会话不得越过**，用户明确「怕手机寄了」。
+> 包名基准唯一：`com.zhanglv.expense`。
+
+1. **只允许**只读或应用沙箱内操作：`adb devices` / `getprop` / `logcat` / `dumpsys` / `install` / `uninstall com.zhanglv.expense` / `am start` / `am force-stop` / `screencap` / `screenrecord` / `adb pull` / `adb push`（仅 `/sdcard/Download` 等用户目录）。
+2. **绝对禁止**：`fastboot` 任意子命令（flash/erase/format/oem unlock）、解锁 Bootloader、刷 Recovery/ROM、Root（`adb root`/`su`/Magisk）、对非本应用的 `pm clear`、`adb shell rm -rf`、恢复出厂设置、`adb sideload`、修改系统分区、`adb shell settings put`、要求用户开启 OEM 解锁或 USB 调试（安全设置）。
+3. **安装/卸载必须走 `scripts/device.sh`**（内置设备唯一性 + 包名白名单 + 卸载前后核对三道校验），禁止手写 adb 命令绕过校验。用户手机只需开「USB 调试」并点一次「允许」，验证完卸载本应用即完全还原。
