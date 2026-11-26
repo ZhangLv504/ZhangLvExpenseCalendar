@@ -71,13 +71,19 @@ ApplicationWindow {
                     }
                     ToolButton {
                         text: qsTr("›")
+                        enabled: app.canGoNextMonth()
                         onClicked: {
+                            if (!app.canGoNextMonth()) return;
                             var y = app.currentYear;
                             var m = app.currentMonth + 1;
                             if (m > 12) { m = 1; y += 1; }
                             app.currentYear = y;
                             app.currentMonth = m;
                         }
+                    }
+                    ToolButton {
+                        text: qsTr("日历")
+                        onClicked: stack.push(calendarPage)
                     }
                     ToolButton {
                         text: qsTr("导出")
@@ -288,7 +294,12 @@ ApplicationWindow {
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
                 }
 
-                Label { text: qsTr("日期时间"); color: "#888"; font.pixelSize: 13 }
+                Label {
+                    text: qsTr("日期时间")
+                    color: "#888"
+                    font.pixelSize: 13
+                    Layout.topMargin: 12
+                }
                 TextField {
                     id: dateField
                     Layout.fillWidth: true
@@ -744,6 +755,246 @@ ApplicationWindow {
             }
 
             Component.onCompleted: reload()
+        }
+    }
+
+    // 当月日历：点击某天查看当天收入支出明细
+    Component {
+        id: calendarPage
+        Page {
+            property int selectedDay: 0
+            property var dailyMap: ({})
+
+            function reload() {
+                dailyMap = app.monthDailyMap();
+                // 默认选中今天（仅当查看的是当月），否则选中 1 号
+                var today = new Date();
+                selectedDay = (app.currentYear === today.getFullYear()
+                               && app.currentMonth === today.getMonth() + 1)
+                    ? today.getDate() : 1;
+                selectDay(selectedDay);
+            }
+
+            function selectDay(day) {
+                selectedDay = day;
+                dayModel.clear();
+                var items = app.transactionsOnDay(day);
+                for (var i = 0; i < items.length; ++i) {
+                    dayModel.append({
+                        type: items[i].type,
+                        amountText: items[i].amountText,
+                        category: items[i].category,
+                        note: items[i].note,
+                        dateText: items[i].dateText
+                    });
+                }
+                var info = dailyMap[String(day)] || {};
+                infoIncome.text = info.incomeText || "";
+                infoExpense.text = info.expenseText || "";
+            }
+
+            header: ToolBar {
+                RowLayout {
+                    anchors.fill: parent
+                    ToolButton {
+                        text: qsTr("‹ 返回")
+                        onClicked: stack.pop()
+                    }
+                    ToolButton {
+                        text: qsTr("‹")
+                        onClicked: {
+                            var y = app.currentYear;
+                            var m = app.currentMonth - 1;
+                            if (m < 1) { m = 12; y -= 1; }
+                            app.currentYear = y;
+                            app.currentMonth = m;
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Qt.AlignHCenter
+                        text: app.currentYear + qsTr("年") + app.currentMonth + qsTr("月")
+                        font.pixelSize: 17
+                        font.bold: true
+                    }
+                    ToolButton {
+                        text: qsTr("›")
+                        enabled: app.canGoNextMonth()
+                        onClicked: {
+                            if (!app.canGoNextMonth()) return;
+                            var y = app.currentYear;
+                            var m = app.currentMonth + 1;
+                            if (m > 12) { m = 1; y += 1; }
+                            app.currentYear = y;
+                            app.currentMonth = m;
+                        }
+                    }
+                }
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Repeater {
+                        model: ["日", "一", "二", "三", "四", "五", "六"]
+                        Label {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Qt.AlignHCenter
+                            text: modelData
+                            color: "#999"
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+
+                Grid {
+                    id: dayGrid
+                    Layout.fillWidth: true
+                    columns: 7
+                    rows: 6
+                    spacing: 2
+                    property int firstWeekday: {
+                        var d = new Date(app.currentYear, app.currentMonth - 1, 1);
+                        return d.getDay();
+                    }
+                    property int daysInMonth: {
+                        var d = new Date(app.currentYear, app.currentMonth, 0);
+                        return d.getDate();
+                    }
+
+                    Repeater {
+                        model: 42
+                        Rectangle {
+                            id: dayCell
+                            readonly property int dayValue: index - dayGrid.firstWeekday + 1
+                            readonly property bool inMonth: dayValue >= 1 && dayValue <= dayGrid.daysInMonth
+                            width: (dayGrid.width - dayGrid.spacing * 6) / 7
+                            height: 52
+                            radius: 4
+                            color: !inMonth ? "transparent"
+                                : (dayValue === selectedDay ? "#E3F2FD" : "#FAFAFA")
+                            border.color: dayValue === selectedDay ? "#1976D2" : "#EEEEEE"
+                            border.width: dayValue === selectedDay ? 2 : 1
+                            opacity: inMonth ? 1 : 0
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: parent.inMonth
+                                onClicked: selectDay(parent.dayValue)
+                            }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                spacing: 0
+                                Label {
+                                    horizontalAlignment: Qt.AlignHCenter
+                                    text: dayCell.inMonth ? String(dayCell.dayValue) : ""
+                                    font.pixelSize: 13
+                                    font.bold: dayCell.dayValue === selectedDay
+                                    color: "#333"
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Qt.AlignHCenter
+                                    font.pixelSize: 9
+                                    color: "#C62828"
+                                    text: {
+                                        var info = dailyMap[String(dayCell.dayValue)];
+                                        return info && info.expenseText ? "-" + info.expenseText : "";
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Qt.AlignHCenter
+                                    font.pixelSize: 9
+                                    color: "#2E7D32"
+                                    text: {
+                                        var info = dailyMap[String(dayCell.dayValue)];
+                                        return info && info.incomeText ? "+" + info.incomeText : "";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    color: "#F5F5F5"
+                    radius: 6
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        Label {
+                            text: selectedDay + qsTr("日")
+                            font.bold: true
+                            font.pixelSize: 14
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Qt.AlignRight
+                            text: qsTr("收 ") + (infoIncome.text || "0.00")
+                                + qsTr("   支 ") + (infoExpense.text || "0.00")
+                            font.pixelSize: 12
+                            color: "#666"
+                        }
+                        Label { id: infoIncome; visible: false; text: "" }
+                        Label { id: infoExpense; visible: false; text: "" }
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    ListView {
+                        anchors.fill: parent
+                        clip: true
+                        model: ListModel { id: dayModel }
+                        delegate: ItemDelegate {
+                            width: ListView.view.width
+                            height: 46
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: model.category + (model.note ? "  " + model.note : "")
+                                        font.pixelSize: 14
+                                    }
+                                    Label {
+                                        text: model.dateText
+                                        font.pixelSize: 10
+                                        color: "#999"
+                                    }
+                                }
+                                Label {
+                                    text: (model.type === 1 ? "+" : "-") + model.amountText
+                                    color: model.type === 1 ? "#C62828" : "#2E7D32"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+                            }
+                        }
+                    }
+                    Label {
+                        anchors.centerIn: parent
+                        visible: dayModel.count === 0
+                        text: qsTr("当天没有账目")
+                        color: "#AAA"
+                    }
+                }
+            }
+
+            Component.onCompleted: reload()
+            Connections {
+                target: app
+                function onMonthChanged() { reload() }
+            }
         }
     }
 }

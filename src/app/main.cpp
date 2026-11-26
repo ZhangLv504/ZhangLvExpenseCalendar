@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ZhangLvExpense"));
-    app.setApplicationVersion(QStringLiteral("0.5.0"));
+    app.setApplicationVersion(QStringLiteral("0.6.0"));
     app.setOrganizationName(QStringLiteral("ZhangLv"));
 
     // 数据库落在本应用私有数据目录，不申请任何存储权限

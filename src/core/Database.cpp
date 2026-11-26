@@ -2,6 +2,7 @@
 #include "Category.h"
 
 #include <QDir>
+#include <QMap>
 #include <QFileInfo>
 #include <QDateTime>
 #include <QStringList>
@@ -810,6 +811,72 @@ QVector<MonthPoint> Database::monthSeries(int year, int month, int count,
             else point.expenseCents = sum;
         }
         result.append(point);
+    }
+    return result;
+}
+
+QVector<DaySummary> Database::monthDailySummary(int year, int month, QString *error) const
+{
+    QVector<DaySummary> result;
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return result;
+    }
+
+    // 复用月度查询，再按本地日期在 C++ 分组：避免 SQLite 时区换算陷阱，逻辑清晰。
+    const QVector<Transaction> items = queryByMonth(year, month, error);
+    QMap<int, DaySummary> byDay;
+    for (const Transaction &tx : items) {
+        const int day = QDateTime::fromMSecsSinceEpoch(tx.createdMs).date().day();
+        DaySummary &d = byDay[day];
+        d.day = day;
+        if (tx.type == TxType::Income) d.incomeCents += tx.amountCents;
+        else d.expenseCents += tx.amountCents;
+        d.count += 1;
+    }
+    for (auto it = byDay.constBegin(); it != byDay.constEnd(); ++it)
+        result.append(it.value());
+    return result;
+}
+
+QVector<Transaction> Database::queryByDate(int year, int month, int day,
+                                           QString *error) const
+{
+    QVector<Transaction> result;
+    if (day < 1 || day > QDate(year, month, 1).daysInMonth()) {
+        if (error) *error = QStringLiteral("日期无效");
+        return result;
+    }
+    const qint64 from = QDateTime(QDate(year, month, day), QTime(0, 0, 0)).toMSecsSinceEpoch();
+    const QDate nextDate = QDate(year, month, day).addDays(1);
+    const qint64 to = QDateTime(nextDate, QTime(0, 0, 0)).toMSecsSinceEpoch();
+
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return result;
+    }
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "SELECT id, type, amount_cents, category, note, created_ms "
+        "FROM transactions WHERE created_ms >= ? AND created_ms < ? "
+        "ORDER BY created_ms DESC, id DESC"));
+    q.addBindValue(QVariant::fromValue(from));
+    q.addBindValue(QVariant::fromValue(to));
+    if (!q.exec()) {
+        if (error) *error = lastError(q, QStringLiteral("查询当日账目失败"));
+        return {};
+    }
+    while (q.next()) {
+        Transaction tx;
+        tx.id = q.value(0).toLongLong();
+        tx.type = static_cast<TxType>(q.value(1).toInt());
+        tx.amountCents = q.value(2).toLongLong();
+        tx.category = q.value(3).toString();
+        tx.note = q.value(4).toString();
+        tx.createdMs = q.value(5).toLongLong();
+        result.append(tx);
     }
     return result;
 }

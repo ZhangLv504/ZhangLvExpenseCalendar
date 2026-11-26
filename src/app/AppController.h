@@ -86,6 +86,13 @@ public:
     Q_INVOKABLE QString monthBalanceText() const;
     Q_INVOKABLE QString dailyAverageText() const;
 
+    // 日历数据：monthDailyMap 返回 {"3": {incomeText, expenseText, count}, ...}；
+    // transactionsOnDay(day) 返回当天账目 [{type,amountText,category,note,dateText}]。
+    Q_INVOKABLE QVariantMap monthDailyMap() const;
+    Q_INVOKABLE QVariantList transactionsOnDay(int day) const;
+    // 是否允许前进到下一月（不超过系统当前月）。
+    Q_INVOKABLE bool canGoNextMonth() const;
+
     // 分类管理（写入 SQLite 持久化）
     // categoryDetails 返回 [{name, builtin}]，供管理页标注内置分类不可删
     Q_INVOKABLE QVariantList categoryDetails(int type) const;

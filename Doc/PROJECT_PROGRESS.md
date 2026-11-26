@@ -7,8 +7,8 @@
 
 | 项         | 当前值                                                       |
 | ---------- | ------------------------------------------------------------ |
-| 当前里程碑 | **M4 — 已交付**                                              |
-| 当前版本   | `0.5.0`（versionCode 5）                                     |
+| 当前里程碑 | **M4.1 — 已交付**（日历视图，用户反馈驱动）                  |
+| 当前版本   | `0.6.0`（versionCode 6）                                     |
 | 下一步动作 | 进入 M5：正式签名与发布打磨；真机操作先遵守第 1.1 节安全契约 |
 
 ## 1. 环境契约（锁定）
@@ -43,6 +43,7 @@
 | M2     | 明细搜索筛选、月度分类统计                              | 已交付（0.3.0） |
 | M3     | CSV 导出（Android SAF，不申请存储权限）                  | 已交付（0.4.0） |
 | M4     | 月度预算、结余/日均统计                                 | 已交付（0.5.0） |
+| M4.1   | 日历视图（按天看收支）、月份上限、编辑页间距            | 已交付（0.6.0） |
 | M5     | 正式签名与发布打磨                                      | 未开始 |
 
 > 说明：M0 搭建骨架时已将核心记账闭环一并实现；0.2.0 补齐 M1 收尾项——分类持久化与自定义管理、
@@ -65,7 +66,7 @@ ZhangLvExpense/
 │       ├── main.cpp             # 入口：QApplication(Basic 样式)、私有目录建库、注册 QML 上下文
 │       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选、分类管理、日期时间、统计、SAF 导出、预算
 │       ├── TransactionModel.*   # QAbstractListModel（含 count 属性），供 ListView 绑定
-│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计（含预算卡片）、导出按钮与轻提示
+│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计（含预算卡片）、日历视图、导出按钮与轻提示
 ├── tests/                       # tst_money / tst_database / tst_datetime / tst_csv（Qt Test）
 ├── scripts/device.sh            # 真机/模拟器安全操作封装（白名单；ui 动作仅限 emulator-*）
 ├── android/                     # Android 打包模板（manifest 竖屏、包名、gradle）
@@ -82,7 +83,25 @@ ZhangLvExpense/
 
 ## 4. 验收结果
 
-### 4.0 M4 / 0.5.0（当前）
+### 4.0 M4.1 / 0.6.0（当前）
+
+> 用户手机实测反馈驱动：时间不超过当前月、点击看某天收支、编辑页日期栏上方加间距。
+
+#### 桌面单测
+- CTest：4 套件全过，`tst_database` 新增「每日汇总与按日查询」用例（当天多笔汇总、时间倒序、空日/无效日拒绝），合计 75 项
+
+#### Android 构建
+- arm64-v8a：Debug 配置签名包 `dist/zhanglv-expense-0.6.0-arm64-v8a-debug.apk`（SHA-256 见 dist/README.md）
+- aapt 校验：versionCode 6 / versionName 0.6.0 / 应用名「张律记账」/ 图标 / arm64-v8a；apksigner 签名有效
+
+#### 模拟器验收（Android 15, x86_64）
+- 主界面新增「日历」入口；日历页显示当月网格（日~六列头、日期数字、有账目日期显示红色支出/绿色收入小计）
+- 默认选中今天并高亮；点击其它日期后选中框与下方汇总条同步更新
+- 记一笔「支出 餐饮 12.34」后，26 号格子显示 `-12.34`，汇总条「收 0.00 支 12.34」，当天列表显示「餐饮 -12.34 / 2026-11-26 08:42」
+- 「›」下月按钮在当月为灰色禁用（`canGoNextMonth()`），无法翻到未来月份
+- 编辑页「日期时间」栏上方已加间距；无 QML 错误/FATAL
+
+### 4.1 M4 / 0.5.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 / `tst_database`：19（新增预算 CRUD、近 N 月趋势归属）/ `tst_datetime`：17 / `tst_csv`：7 项全部通过
@@ -102,7 +121,7 @@ ZhangLvExpense/
 - 模拟器 SwiftShader 在交互过程中偶发 hwuiTask SIGABRT 与 adb 连接抖动，属图形栈/连接层问题；预算设置完整 UI 交互未能在此环境稳定跑完，其数据层由 tst_database 2 项新测试覆盖
 - 无 QML 错误/FATAL（应用启动与统计页加载阶段）
 
-### 4.1 M3 / 0.4.0
+### 4.2 M3 / 0.4.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 / `tst_database`：17 / `tst_datetime`：17 / `tst_csv`：7 项全部通过
@@ -123,7 +142,7 @@ ZhangLvExpense/
 - 卸载/重装走 `scripts/device.sh` 闭环通过，卸载后确认清除
 - 无 QML 错误/FATAL（模拟器 SwiftShader 偶发 hwui SIGABRT 为已知图形栈问题，重启模拟器后稳定）
 
-### 4.2 M2 / 0.3.0
+### 4.3 M2 / 0.3.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -144,7 +163,7 @@ ZhangLvExpense/
 - 缺陷修复：空态文案被列表内容层遮挡（0.2.0 遗留，`app.model.count` 在 QAbstractListModel 上不存在）；为 TransactionModel 补 `count` 属性，并将空态标签改为列表容器内的独立叠加层，验证通过
 - logcat 无 QML 错误/FATAL
 
-### 4.3 M1 / 0.2.0（历史）
+### 4.4 M1 / 0.2.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -166,7 +185,7 @@ ZhangLvExpense/
 - 持久化：新增账目 5.00 与自定义分类 PersistCat 后 force-stop 重启，账目与分类均保留（SQLite 真实落盘）
 - 自动化工具：`scripts/device.sh` 新增 `start/stop/shot/ui`；`ui`（tap/swipe/text/key）硬校验设备序列号为 `emulator-*`，真机一律拒绝
 
-### 4.4 M0 / 0.1.0（历史）
+### 4.5 M0 / 0.1.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -185,7 +204,7 @@ ZhangLvExpense/
 - 持久化：force-stop 后重启，账目仍在（SQLite 真实落盘）
 - 非法金额（格式错误）被拒绝并提示，不落库
 
-### 4.5 已知限制
+### 4.6 已知限制
 - 模拟器 SwiftShader 软件渲染下，部分 Qt Quick Controls 控件（ToolBar/Button/ComboBox 背景）出现梯形斜切视觉瑕疵；属模拟器图形栈渲染问题，arm64 真机交付包不受影响。
 - 应用使用 Basic 样式以保证低配设备渲染稳定。
 - 正式签名未接入（当前 debug 签名，仅侧载验证），按约定在 M5 前落地。
@@ -193,6 +212,7 @@ ZhangLvExpense/
 
 ## 5. 变更日志
 
+- **M4.1 / 0.6.0（2026-11-26）**：按用户手机实测反馈新增日历视图（当月网格、每天收支小计、点击某天看当天明细），月份导航不超过当前月，编辑页日期栏上方加间距；Database 新增 `monthDailySummary`/`queryByDate`，tst_database 增加每日汇总用例；模拟器完整验收通过。
 - **M4 / 0.5.0（2026-11-26）**：新增 budgets 表与预算 CRUD（upsert/清除/跨月隔离），统计页增加月度预算卡片（进度条/剩余/超支提示）、结余与日均支出指标；`budgetInfo` 在 C++ 以 int64 分完成所有金额运算；修复预算卡片布局重叠与趋势测试共享数据污染；桌面 74 项单测 + 模拟器统计页加载/布局验收通过（预算设置完整 UI 交互受模拟器图形栈限制未跑完，数据层由单测覆盖）。
 - **M3 / 0.4.0（2026-11-26）**：新增 CsvExporter（UTF-8 BOM / RFC4180 转义 / 公式注入防护）与 7 项单测；引入 QtWidgets，用 QFileDialog 的 Android 原生 SAF（ACTION_CREATE_DOCUMENT）+ QFile 写 content:// URI 实现导出，不申请存储权限；主界面加导出按钮与轻提示；桌面 72 项单测 + 模拟器 SAF 导出落盘校验通过。
 - **M2 / 0.3.0（2026-11-25）**：明细页新增类型筛选与关键字搜索（分类/备注，LIKE 通配符转义）；新增月度分类统计页（按分类汇总、笔数、占比条）；修复空态文案不显示的遗留缺陷（TransactionModel 补 count、空态独立叠加层）；桌面 65 项单测 + 模拟器筛选/统计/交互回归通过。

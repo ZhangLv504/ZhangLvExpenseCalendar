@@ -315,6 +315,50 @@ QString AppController::dailyAverageText() const
     return Money::format(m_expenseCents / days);
 }
 
+QVariantMap AppController::monthDailyMap() const
+{
+    QVariantMap result;
+    if (!m_db || !m_db->isOpen())
+        return result;
+    const QVector<DaySummary> days = m_db->monthDailySummary(m_year, m_month, nullptr);
+    for (const DaySummary &d : days) {
+        QVariantMap cell;
+        cell.insert(QStringLiteral("incomeText"),
+                    d.incomeCents > 0 ? Money::format(d.incomeCents) : QString());
+        cell.insert(QStringLiteral("expenseText"),
+                    d.expenseCents > 0 ? Money::format(d.expenseCents) : QString());
+        cell.insert(QStringLiteral("count"), d.count);
+        result.insert(QString::number(d.day), cell);
+    }
+    return result;
+}
+
+QVariantList AppController::transactionsOnDay(int day) const
+{
+    QVariantList result;
+    if (!m_db || !m_db->isOpen())
+        return result;
+    const QVector<Transaction> items = m_db->queryByDate(m_year, m_month, day, nullptr);
+    for (const Transaction &tx : items) {
+        QVariantMap m;
+        m.insert(QStringLiteral("type"), static_cast<int>(tx.type));
+        m.insert(QStringLiteral("amountText"), Money::format(tx.amountCents));
+        m.insert(QStringLiteral("category"), tx.category);
+        m.insert(QStringLiteral("note"), tx.note);
+        m.insert(QStringLiteral("dateText"), DateTimeUtil::format(tx.createdMs));
+        result.append(m);
+    }
+    return result;
+}
+
+bool AppController::canGoNextMonth() const
+{
+    const QDate today = QDate::currentDate();
+    if (m_year < today.year()) return true;
+    if (m_year > today.year()) return false;
+    return m_month < today.month();
+}
+
 QVariantList AppController::categoryDetails(int type) const
 {
     QVariantList list;

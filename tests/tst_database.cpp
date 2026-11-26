@@ -31,6 +31,7 @@ private slots:
     void monthCategoryStats();     // 月度分类汇总
     void budgetCrud();             // 预算 upsert/读取/删除/跨月隔离
     void monthSeriesTrend();       // 近 N 月趋势归属
+    void dailySummaryAndByDate();  // 每日汇总与按日查询
 
 private:
     QTemporaryDir m_dir;
@@ -499,6 +500,45 @@ void DatabaseTest::monthSeriesTrend()
 
     // count<=0 返回空
     QVERIFY(db.monthSeries(2026, 12, 0, &err).isEmpty());
+}
+
+void DatabaseTest::dailySummaryAndByDate()
+{
+    QString err;
+    zl::Database db(m_dir.filePath(QStringLiteral("daily.sqlite")));
+    QVERIFY(db.open(&err));
+
+    const qint64 d1 = QDateTime(QDate(2026, 11, 3), QTime(9, 0)).toMSecsSinceEpoch();
+    const qint64 d2 = QDateTime(QDate(2026, 11, 3), QTime(20, 30)).toMSecsSinceEpoch();
+    const qint64 d3 = QDateTime(QDate(2026, 11, 15), QTime(12, 0)).toMSecsSinceEpoch();
+    zl::Transaction a = makeTx(zl::TxType::Expense, 1000, QStringLiteral("餐饮"), d1);
+    zl::Transaction b = makeTx(zl::TxType::Expense, 2500, QStringLiteral("交通"), d2);
+    zl::Transaction c = makeTx(zl::TxType::Income, 500000, QStringLiteral("工资"), d3);
+    QVERIFY(db.insert(&a, &err));
+    QVERIFY(db.insert(&b, &err));
+    QVERIFY(db.insert(&c, &err));
+
+    // 每日汇总：11/3 支出 35.00 共 2 笔；11/15 收入 5000.00 共 1 笔
+    const QVector<zl::DaySummary> summary = db.monthDailySummary(2026, 11, &err);
+    QCOMPARE(summary.size(), 2);
+    QCOMPARE(summary.at(0).day, 3);
+    QCOMPARE(summary.at(0).expenseCents, qint64(3500));
+    QCOMPARE(summary.at(0).incomeCents, qint64(0));
+    QCOMPARE(summary.at(0).count, 2);
+    QCOMPARE(summary.at(1).day, 15);
+    QCOMPARE(summary.at(1).incomeCents, qint64(500000));
+
+    // 按日查询：11/3 两笔，按时间倒序（20:30 在前）
+    const QVector<zl::Transaction> day3 = db.queryByDate(2026, 11, 3, &err);
+    QCOMPARE(day3.size(), 2);
+    QCOMPARE(day3.at(0).amountCents, qint64(2500));
+    QCOMPARE(day3.at(1).amountCents, qint64(1000));
+    // 空日与无效日
+    QVERIFY(db.queryByDate(2026, 11, 4, &err).isEmpty());
+    QVERIFY(db.queryByDate(2026, 11, 31, &err).isEmpty());
+    err.clear();
+    QVERIFY(db.queryByDate(2026, 11, 32, &err).isEmpty());
+    QVERIFY(!err.isEmpty());
 }
 
 QTEST_MAIN(DatabaseTest)

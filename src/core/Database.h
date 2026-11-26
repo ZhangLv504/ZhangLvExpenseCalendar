@@ -39,6 +39,14 @@ struct MonthPoint {
     std::int64_t expenseCents = 0;
 };
 
+// 某日收支汇总（单位：分），供日历格子显示
+struct DaySummary {
+    int day = 0;
+    std::int64_t incomeCents = 0;
+    std::int64_t expenseCents = 0;
+    int count = 0;
+};
+
 // 单一账本的 SQLite 存储引擎。
 // 线程约定：实例只在创建它的线程使用；写操作全部包裹在事务中，失败自动回滚。
 class Database final {
@@ -110,6 +118,14 @@ public:
     // 含当前月在内的近 N 个月收支趋势，按时间升序（旧→新）。
     QVector<MonthPoint> monthSeries(int year, int month, int count,
                                     QString *error = nullptr) const;
+
+    // 指定年月每日收支汇总，仅有账目的日期才有条目，按日升序。
+    QVector<DaySummary> monthDailySummary(int year, int month,
+                                          QString *error = nullptr) const;
+
+    // 查询指定年月某日的全部账目，按时间倒序。
+    QVector<Transaction> queryByDate(int year, int month, int day,
+                                     QString *error = nullptr) const;
 
 private:
     bool seedBuiltinCategories(class QSqlDatabase &db, QString *error);
