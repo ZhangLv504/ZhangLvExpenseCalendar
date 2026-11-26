@@ -7,9 +7,9 @@
 
 | 项         | 当前值                                                       |
 | ---------- | ------------------------------------------------------------ |
-| 当前里程碑 | **M2 — 已交付**                                              |
-| 当前版本   | `0.3.0`（versionCode 3）                                     |
-| 下一步动作 | 进入 M3：CSV 导出与备份（Android SAF）；真机操作先遵守第 1.1 节安全契约 |
+| 当前里程碑 | **M3 — 已交付**                                              |
+| 当前版本   | `0.4.0`（versionCode 4）                                     |
+| 下一步动作 | 进入 M4：预算与更多统计维度；真机操作先遵守第 1.1 节安全契约 |
 
 ## 1. 环境契约（锁定）
 
@@ -40,7 +40,7 @@
 | M0     | 工程骨架、基础页面导航、SQLite 初始化、Android 打包链路 | 已交付 |
 | M1     | 核心记账闭环（增删改查、分类、明细列表、本地持久化）    | 已交付（0.2.0） |
 | M2     | 明细搜索筛选、月度分类统计                              | 已交付（0.3.0） |
-| M3     | CSV 导出与备份（Android SAF）                            | 未开始 |
+| M3     | CSV 导出（Android SAF，不申请存储权限）                  | 已交付（0.4.0） |
 | M4     | 预算与更多统计维度                                      | 未开始 |
 | M5     | 正式签名与发布打磨                                      | 未开始 |
 
@@ -55,16 +55,17 @@ ZhangLvExpense/
 ├── src/
 │   ├── core/                    # 纯 C++ 核心层（可独立单测，无 QML 依赖）
 │   │   ├── Money.{h,cpp}        # 金额解析/格式化，全链路 int64_t 分，逐字符处理禁用浮点
+│   │   ├── CsvExporter.{h,cpp}  # CSV 生成：UTF-8 BOM、RFC4180 转义、公式注入防护
 │   │   ├── DateTimeUtil.{h,cpp}# "yyyy-MM-dd HH:mm" 解析/格式化，毫秒时间戳流转
 │   │   ├── Transaction.{h,cpp}  # 账目模型 + 合法性校验
 │   │   ├── Category.{h,cpp}     # 内置收支分类（首次打开播种进 SQLite）
 │   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/筛选查询/月度汇总/分类汇总与 CRUD
 │   └── app/
-│       ├── main.cpp             # 入口：Basic 样式、应用私有目录建库、注册 QML 上下文
-│       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选状态、分类管理、日期时间、统计
+│       ├── main.cpp             # 入口：QApplication(Basic 样式)、私有目录建库、注册 QML 上下文
+│       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选、分类管理、日期时间、统计、SAF 导出
 │       ├── TransactionModel.*   # QAbstractListModel（含 count 属性），供 ListView 绑定
-│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计
-├── tests/                       # tst_money / tst_database / tst_datetime（Qt Test）
+│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计、导出按钮与轻提示
+├── tests/                       # tst_money / tst_database / tst_datetime / tst_csv（Qt Test）
 ├── scripts/device.sh            # 真机/模拟器安全操作封装（白名单；ui 动作仅限 emulator-*）
 ├── android/                     # Android 打包模板（manifest 竖屏、包名、gradle）
 └── dist/                        # 交付 APK（不入库）+ README.md 版本清单
@@ -78,7 +79,28 @@ ZhangLvExpense/
 
 ## 4. 验收结果
 
-### 4.1 M2 / 0.3.0（当前）
+### 4.0 M3 / 0.4.0（当前）
+
+#### 桌面单测（mingw_64，Qt Test）
+- `tst_money`：31 / `tst_database`：17 / `tst_datetime`：17 / `tst_csv`：7 项全部通过
+- CTest：`100% tests passed, 0 tests failed out of 4`（合计 72 项）
+- CSV 单测覆盖：UTF-8 BOM、表头、RFC4180 逗号/引号/换行转义、`=+-@` 公式注入防护、金额列不做防护、亿元级金额精度、空列表
+
+#### Android 构建
+- arm64-v8a：Release + debug 签名侧载包 `dist/zhanglv-expense-0.4.0-arm64-v8a-debug.apk`（约 22 MiB，SHA-256 见 dist/README.md）；体积较 0.3.0 +2.7 MiB，来自引入 QtWidgets（QFileDialog 的 Android 原生 SAF 支持）
+- x86_64：Debug，模拟器验收包
+- aapt 校验：包名 `com.zhanglv.expense` / versionCode 4 / versionName 0.4.0 / 对应 ABI
+- 权限：不申请任何存储权限；`ACTION_CREATE_DOCUMENT` 由用户授予临时写权限
+
+#### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
+- 主界面新增「导出」按钮；点击后 logcat 出现 `com.android.documentsui.picker.PickActivity`，确认 SAF 原生文件选择器启动
+- 系统选择器默认文件名「掌律记账-2026-11.csv」，中文正常，位置为 Downloads，蓝色 SAVE 按钮正常
+- 点击 SAVE 后文件真实落盘：`/sdcard/Download/掌律记账-2026-11.csv`（50 字节）
+- 拉取文件校验：`BOM=EF-BB-BF`（UTF-8 BOM 正确），内容为 `日期时间,类型,分类,金额(元),备注`（中文表头无乱码）
+- 卸载/重装走 `scripts/device.sh` 闭环通过，卸载后确认清除
+- 无 QML 错误/FATAL（模拟器 SwiftShader 偶发 hwui SIGABRT 为已知图形栈问题，重启模拟器后稳定）
+
+### 4.1 M2 / 0.3.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -147,6 +169,7 @@ ZhangLvExpense/
 
 ## 5. 变更日志
 
+- **M3 / 0.4.0（2026-11-26）**：新增 CsvExporter（UTF-8 BOM / RFC4180 转义 / 公式注入防护）与 7 项单测；引入 QtWidgets，用 QFileDialog 的 Android 原生 SAF（ACTION_CREATE_DOCUMENT）+ QFile 写 content:// URI 实现导出，不申请存储权限；主界面加导出按钮与轻提示；桌面 72 项单测 + 模拟器 SAF 导出落盘校验通过。
 - **M2 / 0.3.0（2026-11-25）**：明细页新增类型筛选与关键字搜索（分类/备注，LIKE 通配符转义）；新增月度分类统计页（按分类汇总、笔数、占比条）；修复空态文案不显示的遗留缺陷（TransactionModel 补 count、空态独立叠加层）；桌面 65 项单测 + 模拟器筛选/统计/交互回归通过。
 - **M1 / 0.2.0（2026-11-25）**：分类持久化（`categories` 表 + 内置播种 + 自定义增删与删除守卫）；新增 DateTimeUtil 支持记一笔/编辑时手工录入日期时间；编辑页补删除入口与独立确认页；`scripts/device.sh` 增加模拟器 UI 自动化（仅 emulator-*）；桌面 62 项单测 + 模拟器三条链路验收通过。
 - **M0 / 0.1.0（2026-11-25）**：搭建 Qt 6.8.3 + QML + C++17 + CMake + SQLite 工程骨架；实现 int64_t 分金额引擎与事务化 SQLite 核心层；完成竖屏记账 UI 闭环与双 ABI 打包链路；桌面 42 项单测 + 模拟器验收通过。

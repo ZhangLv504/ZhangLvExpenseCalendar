@@ -7,5 +7,6 @@ APK 不入库，仅在本机 `dist/` 保留备份。本文件记录每个交付�
 | 0.1.0 | 1 | arm64-v8a | `zhanglv-expense-0.1.0-arm64-v8a-debug.apk` | `a07988dbc0cecb0a7bc959b225c93a8076626631e0b0d530f541834a46588752` | `v0.1.0` | M0 交付包，debug 签名，20 MB |
 | 0.2.0 | 2 | arm64-v8a | `zhanglv-expense-0.2.0-arm64-v8a-debug.apk` | `7113eb10f33fb176f1d4df4c21dfa8f30c93fe2ebe13b82f9bc5834b3aaf7b82` | `v0.2.0` | M1 收尾：自定义分类、删除入口、日期时间录入，debug 签名，20 MB |
 | 0.3.0 | 3 | arm64-v8a | `zhanglv-expense-0.3.0-arm64-v8a-debug.apk` | `597905578a11d99811ead13098f58ac27f64450af885a198146873a894511cac` | `v0.3.0` | M2：明细搜索筛选、分类统计、空态修复，debug 签名，约 19.3 MiB |
+| 0.4.0 | 4 | arm64-v8a | `zhanglv-expense-0.4.0-arm64-v8a-debug.apk` | `6a5853d85976916e87d60d8fc469105c1cb841ad778257074ca24851840ffa27` | `v0.4.0` | M3：CSV 导出（SAF）、公式注入防护，debug 签名，约 22 MiB |
 
 > x86_64 包仅用于模拟器验收（`build-android-x86_64/android-build/ZhangLvExpense.apk`），不列入交付清单。

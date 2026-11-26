@@ -2,11 +2,17 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QDir>
 #include <QVariant>
+#include <QFile>
+#include <QFileDialog>
+#include <QStandardPaths>
+#include <QUrl>
 
 #include "Money.h"
 #include "Category.h"
 #include "DateTimeUtil.h"
+#include "CsvExporter.h"
 
 namespace zl {
 
@@ -262,6 +268,59 @@ QString AppController::removeCategory(int type, const QString &name)
         return error;
     }
     emit categoriesChanged();
+    return QString();
+}
+
+QString AppController::exportMonthCsv(int year, int month)
+{
+    if (!m_db || !m_db->isOpen())
+        return QStringLiteral("数据库未初始化");
+
+    QString error;
+    const QVector<Transaction> items = m_db->queryByMonth(year, month, &error);
+    if (!error.isEmpty())
+        return error;
+
+    const QByteArray csv = CsvExporter::build(items);
+
+    // 默认文件名；Android 上平台文件对话框会用 ACTION_CREATE_DOCUMENT (SAF)，
+    // 用户自选保存位置并授予临时写权限，无需任何存储权限。
+    const QString fileName = QStringLiteral("掌律记账-%1-%2.csv")
+        .arg(year).arg(month, 2, 10, QLatin1Char('0'));
+    const QString docDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QUrl defaultUrl = QUrl::fromLocalFile(QDir(docDir).filePath(fileName));
+
+    const QUrl target = QFileDialog::getSaveFileUrl(
+        nullptr,
+        QStringLiteral("导出 %1年%2月 账目").arg(year).arg(month),
+        defaultUrl,
+        QStringLiteral("CSV 文件 (*.csv)"));
+
+    if (target.isEmpty()) {
+        emit exportFinished(false, QStringLiteral("已取消导出"));
+        return QString();
+    }
+
+    // content:// URI 以 QString 形式传给 QFile 即可触发 Android content file engine；
+    // 本地 file:// URI 则取本地路径。两者统一到 QString。
+    const QString filePath = target.isLocalFile() ? target.toLocalFile() : target.toString();
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        const QString msg = QStringLiteral("无法写入所选位置：%1").arg(file.errorString());
+        emit exportFinished(false, msg);
+        return msg;
+    }
+    const qint64 written = file.write(csv);
+    file.flush();
+    file.close();
+    if (written != csv.size()) {
+        const QString msg = QStringLiteral("写入不完整，请检查存储空间");
+        emit exportFinished(false, msg);
+        return msg;
+    }
+
+    const QString msg = QStringLiteral("已导出 %1 条账目").arg(items.size());
+    emit exportFinished(true, msg);
     return QString();
 }
 

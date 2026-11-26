@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(zhanglv_expense
-    VERSION 0.3.0
+    VERSION 0.4.0
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -11,7 +11,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS
-    Core Gui Quick QuickControls2 Sql Test)
+    Core Gui Widgets Quick QuickControls2 Sql Test)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -33,14 +33,14 @@ qt_add_qml_module(ZhangLvExpense
         src/app/qml/Main.qml)
 
 target_link_libraries(ZhangLvExpense PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Sql
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Quick Qt6::QuickControls2 Qt6::Sql
     zlexpense_core)
 
 set_target_properties(ZhangLvExpense PROPERTIES
     QT_ANDROID_PACKAGE_NAME "com.zhanglv.expense"
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-    QT_ANDROID_VERSION_CODE 3
-    QT_ANDROID_VERSION_NAME "0.3.0"
+    QT_ANDROID_VERSION_CODE 4
+    QT_ANDROID_VERSION_NAME "0.4.0"
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 34)
 

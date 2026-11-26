@@ -17,6 +17,34 @@ ApplicationWindow {
         initialItem: listPage
     }
 
+    // 全局轻提示（导出结果等），避免 Popup/Dialog 在模拟器的渲染问题
+    Label {
+        id: toast
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 96
+        z: 100
+        visible: false
+        padding: 10
+        color: "#FFFFFF"
+        font.pixelSize: 13
+        background: Rectangle { color: "#333333"; radius: 4 }
+    }
+    Timer {
+        id: toastTimer
+        interval: 2600
+        onTriggered: toast.visible = false
+    }
+    Connections {
+        target: app
+        function onExportFinished(ok, message) {
+            toast.text = message;
+            toast.color = ok ? "#FFFFFF" : "#FFFFFF";
+            toast.visible = true;
+            toastTimer.restart();
+        }
+    }
+
     Component {
         id: listPage
         Page {
@@ -50,6 +78,10 @@ ApplicationWindow {
                             app.currentYear = y;
                             app.currentMonth = m;
                         }
+                    }
+                    ToolButton {
+                        text: qsTr("导出")
+                        onClicked: app.exportMonthCsv(app.currentYear, app.currentMonth)
                     }
                     ToolButton {
                         text: qsTr("分类")

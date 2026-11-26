@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -14,9 +14,9 @@ int main(int argc, char *argv[])
     // 使用 Basic 样式：无花哨动画/遮罩，在模拟器与低配设备上渲染稳定
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ZhangLvExpense"));
-    app.setApplicationVersion(QStringLiteral("0.1.0"));
+    app.setApplicationVersion(QStringLiteral("0.4.0"));
     app.setOrganizationName(QStringLiteral("ZhangLv"));
 
     // 数据库落在本应用私有数据目录，不申请任何存储权限

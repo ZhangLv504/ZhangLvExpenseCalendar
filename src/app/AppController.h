@@ -81,6 +81,10 @@ public:
     Q_INVOKABLE QString addCategory(int type, const QString &name);
     Q_INVOKABLE QString removeCategory(int type, const QString &name);
 
+    // 导出指定年月账目为 CSV。Android 走系统文件选择器（SAF），桌面走原生保存对话框；
+    // 返回空串表示用户取消或成功（细节经 exportFinished 通知），非空为错误信息。
+    Q_INVOKABLE QString exportMonthCsv(int year, int month);
+
 public slots:
     void refresh();
 
@@ -89,6 +93,7 @@ signals:
     void monthChanged();
     void filterChanged();
     void categoriesChanged();
+    void exportFinished(bool ok, const QString &message);
     void errorOccurred(const QString &message);
 
 private:
