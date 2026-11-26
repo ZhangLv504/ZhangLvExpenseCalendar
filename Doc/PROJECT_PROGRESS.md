@@ -88,7 +88,8 @@ ZhangLvExpense/
 - CTest：`100% tests passed, 0 tests failed out of 4`（合计 74 项）
 
 #### Android 构建
-- arm64-v8a：Release + debug 签名 `dist/zhanglv-expense-0.5.0-arm64-v8a-debug.apk`（约 22 MiB，SHA-256 见 dist/README.md）
+- arm64-v8a：Debug 配置（自动 Android Debug 签名）侧载包 `dist/zhanglv-expense-0.5.0-arm64-v8a-debug.apk`（约 25 MiB，SHA-256 见 dist/README.md）；apksigner 校验通过，证书指纹与可在真机安装的同类包一致
+- **签名修复**：此前 M0~M4 交付包误用 Release 构建产出（unsigned），真机安装被拒（`apksigner verify` 报 `DOES NOT VERIFY`）；0.5.0 交付包改用 Debug 构建，已修复真机侧载
 - x86_64：Debug，模拟器验收包
 - aapt 校验：包名 `com.zhanglv.expense` / versionCode 5 / versionName 0.5.0 / 对应 ABI
 
@@ -186,6 +187,7 @@ ZhangLvExpense/
 - 模拟器 SwiftShader 软件渲染下，部分 Qt Quick Controls 控件（ToolBar/Button/ComboBox 背景）出现梯形斜切视觉瑕疵；属模拟器图形栈渲染问题，arm64 真机交付包不受影响。
 - 应用使用 Basic 样式以保证低配设备渲染稳定。
 - 正式签名未接入（当前 debug 签名，仅侧载验证），按约定在 M5 前落地。
+- **构建配置红线**：侧载交付包必须用 Debug 配置（`CMAKE_BUILD_TYPE=Debug`），Release 产出 unsigned APK 真机无法安装；模拟器宽松不代表真机可装。
 
 ## 5. 变更日志
 
