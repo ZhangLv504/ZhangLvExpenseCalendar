@@ -29,6 +29,8 @@ private slots:
     void filterCombinations();     // 类型/分类/关键字/组合筛选
     void filterKeywordEscapes();   // LIKE 通配符转义
     void monthCategoryStats();     // 月度分类汇总
+    void budgetCrud();             // 预算 upsert/读取/删除/跨月隔离
+    void monthSeriesTrend();       // 近 N 月趋势归属
 
 private:
     QTemporaryDir m_dir;
@@ -425,6 +427,78 @@ void DatabaseTest::monthCategoryStats()
     err.clear();
     QVERIFY(db.monthCategoryStats(2027, 4, 5, &err).isEmpty());
     QVERIFY(!err.isEmpty());
+}
+
+void DatabaseTest::budgetCrud()
+{
+    QString err;
+    const int expense = static_cast<int>(zl::TxType::Expense);
+    const int income = static_cast<int>(zl::TxType::Income);
+
+    // 初始无预算
+    bool found = true;
+    QCOMPARE(m_db->budget(2026, 11, expense, &found, &err), qint64(0));
+    QVERIFY(!found);
+
+    // 设置预算
+    QVERIFY(m_db->setBudget(2026, 11, expense, 300000, &err)); // 3000.00
+    QCOMPARE(m_db->budget(2026, 11, expense, &found, &err), qint64(300000));
+    QVERIFY(found);
+
+    // upsert 覆盖
+    QVERIFY(m_db->setBudget(2026, 11, expense, 500000, &err));
+    QCOMPARE(m_db->budget(2026, 11, expense, &found, &err), qint64(500000));
+
+    // 跨类型/跨月隔离
+    QVERIFY(m_db->setBudget(2026, 11, income, 1000, &err));
+    QVERIFY(m_db->setBudget(2026, 12, expense, 2000, &err));
+    QCOMPARE(m_db->budget(2026, 11, income, &found, &err), qint64(1000));
+    QCOMPARE(m_db->budget(2026, 12, expense, &found, &err), qint64(2000));
+    QCOMPARE(m_db->budget(2026, 11, expense, &found, &err), qint64(500000));
+
+    // 负预算拒绝
+    QVERIFY(!m_db->setBudget(2026, 11, expense, -1, &err));
+    // 非法月份拒绝
+    QVERIFY(!m_db->setBudget(2026, 13, expense, 100, &err));
+
+    // 删除
+    QVERIFY(m_db->removeBudget(2026, 11, income, &err));
+    QVERIFY(!m_db->budget(2026, 11, income, &found, &err));
+    QVERIFY(!found);
+}
+
+void DatabaseTest::monthSeriesTrend()
+{
+    QString err;
+    // 使用独立账本，避免与其它用例共享 m_db 的遗留数据干扰汇总断言
+    zl::Database db(m_dir.filePath(QStringLiteral("series.sqlite")));
+    QVERIFY(db.open(&err));
+
+    const qint64 oct = QDateTime(QDate(2026, 10, 15), QTime(12, 0)).toMSecsSinceEpoch();
+    const qint64 nov = QDateTime(QDate(2026, 11, 15), QTime(12, 0)).toMSecsSinceEpoch();
+    const qint64 dec = QDateTime(QDate(2026, 12, 15), QTime(12, 0)).toMSecsSinceEpoch();
+
+    zl::Transaction a = makeTx(zl::TxType::Expense, 1000, QStringLiteral("餐饮"), oct);
+    zl::Transaction b = makeTx(zl::TxType::Income, 500000, QStringLiteral("工资"), nov);
+    zl::Transaction c = makeTx(zl::TxType::Expense, 2000, QStringLiteral("交通"), dec);
+    QVERIFY(db.insert(&a, &err));
+    QVERIFY(db.insert(&b, &err));
+    QVERIFY(db.insert(&c, &err));
+
+    // 近 3 月（10/11/12），升序
+    const QVector<zl::MonthPoint> series = db.monthSeries(2026, 12, 3, &err);
+    QCOMPARE(series.size(), 3);
+    QCOMPARE(series.at(0).year, 2026);
+    QCOMPARE(series.at(0).month, 10);
+    QCOMPARE(series.at(0).expenseCents, qint64(1000));
+    QCOMPARE(series.at(0).incomeCents, qint64(0));
+    QCOMPARE(series.at(1).month, 11);
+    QCOMPARE(series.at(1).incomeCents, qint64(500000));
+    QCOMPARE(series.at(2).month, 12);
+    QCOMPARE(series.at(2).expenseCents, qint64(2000));
+
+    // count<=0 返回空
+    QVERIFY(db.monthSeries(2026, 12, 0, &err).isEmpty());
 }
 
 QTEST_MAIN(DatabaseTest)

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(zhanglv_expense
-    VERSION 0.4.0
+    VERSION 0.5.0
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -39,8 +39,8 @@ target_link_libraries(ZhangLvExpense PRIVATE
 set_target_properties(ZhangLvExpense PROPERTIES
     QT_ANDROID_PACKAGE_NAME "com.zhanglv.expense"
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-    QT_ANDROID_VERSION_CODE 4
-    QT_ANDROID_VERSION_NAME "0.4.0"
+    QT_ANDROID_VERSION_CODE 5
+    QT_ANDROID_VERSION_NAME "0.5.0"
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 34)
 

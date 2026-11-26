@@ -528,6 +528,19 @@ ApplicationWindow {
                 }
                 totalLabel.text = app.monthTotalText(statsType);
                 countLabel.text = qsTr("共 ") + cnt + qsTr(" 笔");
+                balanceLabel.text = qsTr("结余 ") + app.monthBalanceText();
+                averageLabel.text = qsTr("日均支出 ") + app.dailyAverageText();
+                refreshBudgetCard();
+            }
+
+            // 金额运算全部在 C++ 以分完成，QML 只消费字符串与整数百分比
+            function refreshBudgetCard() {
+                var info = app.budgetInfo(statsType);
+                budgetInput.text = info.budgetText;
+                budgetHint.text = info.hint;
+                budgetHint.color = info.over ? "#C62828"
+                    : (info.budgetText === "" ? "#999999" : "#2E7D32");
+                budgetBarFill.width = budgetBar.width * Math.min(100, info.percent) / 100;
             }
 
             header: ToolBar {
@@ -586,6 +599,87 @@ ApplicationWindow {
                         id: countLabel
                         color: "#999"
                         font.pixelSize: 12
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        id: balanceLabel
+                        color: "#666"
+                        font.pixelSize: 13
+                    }
+                    Label {
+                        id: averageLabel
+                        Layout.fillWidth: true
+                        horizontalAlignment: Qt.AlignRight
+                        color: "#666"
+                        font.pixelSize: 13
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 128
+                    color: "#FAFAFA"
+                    radius: 6
+                    border.color: "#EEEEEE"
+                    border.width: 1
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: statsType === 1 ? qsTr("收入预算") : qsTr("支出预算")
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+                        }
+                        Rectangle {
+                            id: budgetBar
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 8
+                            radius: 4
+                            color: "#EEEEEE"
+                            Rectangle {
+                                id: budgetBarFill
+                                height: parent.height
+                                radius: 4
+                                color: budgetHint.color
+                                width: 0
+                            }
+                        }
+                        Label {
+                            id: budgetHint
+                            Layout.fillWidth: true
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            TextField {
+                                id: budgetInput
+                                Layout.fillWidth: true
+                                placeholderText: qsTr("本月预算（元），留空清除")
+                                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                onAccepted: applyBudget()
+                            }
+                            Button {
+                                text: qsTr("设置")
+                                onClicked: applyBudget()
+                            }
+                        }
+                        function applyBudget() {
+                            var msg = app.setBudget(statsType, budgetInput.text);
+                            if (msg) toast.text = msg, toast.visible = true, toastTimer.restart();
+                            else reload();
+                        }
+                        Connections {
+                            target: app
+                            function onBudgetChanged() { refreshBudgetCard() }
+                        }
                     }
                 }
 

@@ -230,6 +230,91 @@ QString AppController::monthTotalText(int type) const
     return Money::format(type == static_cast<int>(TxType::Income) ? m_incomeCents : m_expenseCents);
 }
 
+QString AppController::budgetText(int type) const
+{
+    if (!m_db || !m_db->isOpen())
+        return QString();
+    bool found = false;
+    const std::int64_t cents = m_db->budget(m_year, m_month, type, &found, nullptr);
+    return found ? Money::format(cents) : QString();
+}
+
+QVariantMap AppController::budgetInfo(int type) const
+{
+    QVariantMap m;
+    m.insert(QStringLiteral("over"), false);
+    m.insert(QStringLiteral("percent"), 0);
+
+    if (!m_db || !m_db->isOpen()) {
+        m.insert(QStringLiteral("budgetText"), QString());
+        m.insert(QStringLiteral("hint"), QString());
+        return m;
+    }
+
+    bool found = false;
+    const std::int64_t budget = m_db->budget(m_year, m_month, type, &found, nullptr);
+    if (!found || budget <= 0) {
+        m.insert(QStringLiteral("budgetText"), QString());
+        m.insert(QStringLiteral("hint"), QStringLiteral("未设置本月预算"));
+        return m;
+    }
+
+    const std::int64_t used = (type == static_cast<int>(TxType::Income))
+        ? m_incomeCents : m_expenseCents;
+    // 先除后乘，避免 used*100 溢出 int64；整数百分比，可 >100
+    const int percent = static_cast<int>((used / budget) * 100 + (used % budget) * 100 / budget);
+
+    m.insert(QStringLiteral("budgetText"), Money::format(budget));
+    m.insert(QStringLiteral("percent"), percent);
+    if (used > budget) {
+        m.insert(QStringLiteral("over"), true);
+        m.insert(QStringLiteral("hint"),
+                 QStringLiteral("已超支 ") + Money::format(used - budget));
+    } else {
+        m.insert(QStringLiteral("hint"),
+                 QStringLiteral("剩余 ") + Money::format(budget - used)
+                 + QStringLiteral("（已用 %1%）").arg(percent));
+    }
+    return m;
+}
+
+QString AppController::setBudget(int type, const QString &amountText)
+{
+    if (!m_db)
+        return QStringLiteral("数据库未初始化");
+
+    QString error;
+    if (amountText.trimmed().isEmpty()) {
+        if (!m_db->removeBudget(m_year, m_month, type, &error)) {
+            emit errorOccurred(error);
+            return error;
+        }
+    } else {
+        std::int64_t cents = 0;
+        if (!Money::parse(amountText, &cents))
+            return QStringLiteral("预算金额格式不正确");
+        if (cents < 0)
+            return QStringLiteral("预算不能为负数");
+        if (!m_db->setBudget(m_year, m_month, type, cents, &error)) {
+            emit errorOccurred(error);
+            return error;
+        }
+    }
+    emit budgetChanged();
+    return QString();
+}
+
+QString AppController::monthBalanceText() const
+{
+    return Money::format(m_incomeCents - m_expenseCents);
+}
+
+QString AppController::dailyAverageText() const
+{
+    const int days = QDate(m_year, m_month, 1).daysInMonth();
+    return Money::format(m_expenseCents / days);
+}
+
 QVariantList AppController::categoryDetails(int type) const
 {
     QVariantList list;

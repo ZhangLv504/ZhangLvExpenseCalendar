@@ -31,6 +31,14 @@ struct CategoryStat {
     int count = 0;
 };
 
+// 月度趋势点（单位：分），供近 N 月收支柱状对比
+struct MonthPoint {
+    int year = 0;
+    int month = 0;
+    std::int64_t incomeCents = 0;
+    std::int64_t expenseCents = 0;
+};
+
 // 单一账本的 SQLite 存储引擎。
 // 线程约定：实例只在创建它的线程使用；写操作全部包裹在事务中，失败自动回滚。
 class Database final {
@@ -88,6 +96,20 @@ public:
 
     // 删除自定义分类；内置分类不可删，已被账目引用的分类不可删。
     bool removeCategory(int type, const QString &name, QString *error = nullptr);
+
+    // ---- 月度预算 ----
+    // 设置/更新预算（金额单位为分，须 >= 0）；按 (year, month, type) upsert。
+    bool setBudget(int year, int month, int type, std::int64_t amountCents,
+                   QString *error = nullptr);
+    // 读取预算；未设置返回 0 且 *found=false。
+    std::int64_t budget(int year, int month, int type, bool *found = nullptr,
+                        QString *error = nullptr) const;
+    // 删除指定预算。
+    bool removeBudget(int year, int month, int type, QString *error = nullptr);
+
+    // 含当前月在内的近 N 个月收支趋势，按时间升序（旧→新）。
+    QVector<MonthPoint> monthSeries(int year, int month, int count,
+                                    QString *error = nullptr) const;
 
 private:
     bool seedBuiltinCategories(class QSqlDatabase &db, QString *error);

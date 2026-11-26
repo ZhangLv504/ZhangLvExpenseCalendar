@@ -141,6 +141,14 @@ bool Database::open(QString *error)
             "  name TEXT NOT NULL,"
             "  builtin INTEGER NOT NULL DEFAULT 0,"
             "  UNIQUE(type, name)"
+            ")"),
+        QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS budgets ("
+            "  year INTEGER NOT NULL,"
+            "  month INTEGER NOT NULL,"
+            "  type INTEGER NOT NULL,"
+            "  amount_cents INTEGER NOT NULL,"
+            "  PRIMARY KEY(year, month, type)"
             ")")
     };
     for (const QString &sql : ddlStatements) {
@@ -659,6 +667,151 @@ bool Database::removeCategory(int type, const QString &name, QString *error)
         return false;
     }
     return true;
+}
+
+bool Database::setBudget(int year, int month, int type, std::int64_t amountCents,
+                         QString *error)
+{
+    if (year < 2000 || month < 1 || month > 12 || amountCents < 0) {
+        if (error) *error = QStringLiteral("预算参数无效");
+        return false;
+    }
+
+    QSqlDatabase db = d->database();
+    if (!db.isOpen() && !open(error))
+        return false;
+    if (!d->begin(&db, error))
+        return false;
+
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "INSERT INTO budgets(year, month, type, amount_cents) VALUES(?, ?, ?, ?) "
+        "ON CONFLICT(year, month, type) DO UPDATE SET amount_cents=excluded.amount_cents"));
+    q.addBindValue(year);
+    q.addBindValue(month);
+    q.addBindValue(type);
+    q.addBindValue(QVariant::fromValue(amountCents));
+    if (!q.exec()) {
+        db.rollback();
+        if (error) *error = lastError(q, QStringLiteral("设置预算失败"));
+        return false;
+    }
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交预算失败"));
+        return false;
+    }
+    return true;
+}
+
+std::int64_t Database::budget(int year, int month, int type, bool *found, QString *error) const
+{
+    if (found) *found = false;
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return 0;
+    }
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "SELECT amount_cents FROM budgets WHERE year=? AND month=? AND type=?"));
+    q.addBindValue(year);
+    q.addBindValue(month);
+    q.addBindValue(type);
+    if (!q.exec()) {
+        if (error) *error = lastError(q, QStringLiteral("查询预算失败"));
+        return 0;
+    }
+    if (q.next()) {
+        if (found) *found = true;
+        return q.value(0).toLongLong();
+    }
+    return 0;
+}
+
+bool Database::removeBudget(int year, int month, int type, QString *error)
+{
+    QSqlDatabase db = d->database();
+    if (!db.isOpen() && !open(error))
+        return false;
+    if (!d->begin(&db, error))
+        return false;
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "DELETE FROM budgets WHERE year=? AND month=? AND type=?"));
+    q.addBindValue(year);
+    q.addBindValue(month);
+    q.addBindValue(type);
+    if (!q.exec()) {
+        db.rollback();
+        if (error) *error = lastError(q, QStringLiteral("删除预算失败"));
+        return false;
+    }
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交失败"));
+        return false;
+    }
+    return true;
+}
+
+QVector<MonthPoint> Database::monthSeries(int year, int month, int count,
+                                          QString *error) const
+{
+    QVector<MonthPoint> result;
+    if (count <= 0)
+        return result;
+
+    // 构造从 (year, month) 往前 count-1 个月的升序序列
+    QVector<QPair<int, int>> months;
+    int y = year;
+    int m = month;
+    for (int i = 0; i < count; ++i) {
+        months.prepend(qMakePair(y, m));
+        m -= 1;
+        if (m < 1) { m = 12; y -= 1; }
+    }
+
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return result;
+    }
+
+    // 月初/月末用本地时间毫秒，与 queryByMonth 保持一致
+    const auto boundsOf = [](int yy, int mm, qint64 *from, qint64 *to) {
+        const QDate first(yy, mm, 1);
+        const QDate next = (mm == 12) ? QDate(yy + 1, 1, 1) : QDate(yy, mm + 1, 1);
+        *from = QDateTime(first, QTime(0, 0, 0)).toMSecsSinceEpoch();
+        *to = QDateTime(next, QTime(0, 0, 0)).toMSecsSinceEpoch();
+    };
+
+    for (const auto &ym : months) {
+        qint64 from = 0, to = 0;
+        boundsOf(ym.first, ym.second, &from, &to);
+        MonthPoint point;
+        point.year = ym.first;
+        point.month = ym.second;
+
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral(
+            "SELECT type, COALESCE(SUM(amount_cents), 0) FROM transactions "
+            "WHERE created_ms >= ? AND created_ms < ? GROUP BY type"));
+        q.addBindValue(QVariant::fromValue(from));
+        q.addBindValue(QVariant::fromValue(to));
+        if (!q.exec()) {
+            if (error) *error = lastError(q, QStringLiteral("查询月度趋势失败"));
+            return {};
+        }
+        while (q.next()) {
+            const int t = q.value(0).toInt();
+            const qint64 sum = q.value(1).toLongLong();
+            if (t == static_cast<int>(TxType::Income)) point.incomeCents = sum;
+            else point.expenseCents = sum;
+        }
+        result.append(point);
+    }
+    return result;
 }
 
 } // namespace zl

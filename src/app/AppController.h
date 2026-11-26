@@ -75,6 +75,17 @@ public:
     // 本月指定类型的合计金额（元字符串），供统计页顶部展示。
     Q_INVOKABLE QString monthTotalText(int type) const;
 
+    // 月度预算：未设置时 budgetText 返回空串；setBudget 的 amountText 为元字符串，
+    // 传空串表示清除预算。
+    Q_INVOKABLE QString budgetText(int type) const;
+    // 预算卡展示数据，金额全部以分在 C++ 算好：
+    // {budgetText, hint, over(bool), percent(int)}
+    Q_INVOKABLE QVariantMap budgetInfo(int type) const;
+    Q_INVOKABLE QString setBudget(int type, const QString &amountText);
+    // 结余（收入-支出，可为负）与日均支出（按当月天数），均为元字符串。
+    Q_INVOKABLE QString monthBalanceText() const;
+    Q_INVOKABLE QString dailyAverageText() const;
+
     // 分类管理（写入 SQLite 持久化）
     // categoryDetails 返回 [{name, builtin}]，供管理页标注内置分类不可删
     Q_INVOKABLE QVariantList categoryDetails(int type) const;
@@ -93,6 +104,7 @@ signals:
     void monthChanged();
     void filterChanged();
     void categoriesChanged();
+    void budgetChanged();
     void exportFinished(bool ok, const QString &message);
     void errorOccurred(const QString &message);
 
