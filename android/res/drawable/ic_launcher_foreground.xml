@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：白色硬币 + 人民币符号，内容控制在 66dp 安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 硬币外圈 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,21 a33,33 0 1,0 0.01,0 Z" />
+    <!-- 内圈挖空（底色），形成环形 -->
+    <path
+        android:fillColor="#2E7D6B"
+        android:pathData="M54,26 a28,28 0 1,0 0.01,0 Z" />
+
+    <!-- 人民币符号 ¥：上 V -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,39 L48,39 L54,50 L60,39 L65,39 L56,54 L52,54 Z" />
+    <!-- ¥ 竖干 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52.5,54 L55.5,54 L55.5,72 L52.5,72 Z" />
+    <!-- ¥ 两横 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,57 L64,57 L64,60 L44,60 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,64 L64,64 L64,67 L44,67 Z" />
+</vector>

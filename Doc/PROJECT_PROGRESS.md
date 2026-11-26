@@ -21,6 +21,7 @@
 | JDK                             | `21.0.12.1`（`D:\AiSoftware\jdk-21.0.12.1`）                 |
 | minSdk / targetSdk / compileSdk | `26 / 34 / 35`                                               |
 | 包名 / 方向 / 语言              | `com.zhanglv.expense` / 竖屏 / 简体中文                      |
+| 应用名 / 桌面图标               | `张律记账` / 自适应图标（蓝绿底 + 白色 ¥ 硬币，API 26+）     |
 | ABI / 验收设备                  | 交付 `arm64-v8a`；验收 `x86_64`（Android 15 模拟器，`-gpu swiftshader`） |
 
 ### 1.1 真机操作安全契约（硬约束）
@@ -90,6 +91,7 @@ ZhangLvExpense/
 #### Android 构建
 - arm64-v8a：Debug 配置（自动 Android Debug 签名）侧载包 `dist/zhanglv-expense-0.5.0-arm64-v8a-debug.apk`（约 25 MiB，SHA-256 见 dist/README.md）；apksigner 校验通过，证书指纹与可在真机安装的同类包一致
 - **签名修复**：此前 M0~M4 交付包误用 Release 构建产出（unsigned），真机安装被拒（`apksigner verify` 报 `DOES NOT VERIFY`）；0.5.0 交付包改用 Debug 构建，已修复真机侧载
+- **应用身份**：`android:label` 由硬编码「掌律记账」改为 `@string/app_name` = 「张律记账」；新增自适应启动图标（蓝绿底 + 白色 ¥ 硬币）；按离线定位移除模板注入的 INTERNET/存储权限（借鉴 ZhangLvKGe 的 `tools:node="remove"` 写法，仅借鉴思路，未改动其项目文件）。用户实测新包装机成功。
 - x86_64：Debug，模拟器验收包
 - aapt 校验：包名 `com.zhanglv.expense` / versionCode 5 / versionName 0.5.0 / 对应 ABI
 

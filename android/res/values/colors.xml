@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与 QML 主色一致：稳重蓝绿底 + 白色人民币符号 -->
+    <color name="ic_launcher_background">#2E7D6B</color>
+</resources>
