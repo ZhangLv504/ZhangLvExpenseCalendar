@@ -11,9 +11,11 @@ APK 不入库，仅在本机 `dist/` 保留备份。本文件记录每个交付�
 | 0.5.0 | 5 | arm64-v8a | `zhanglv-expense-0.5.0-arm64-v8a-debug.apk` | `bf34538b4c7c4eed313f5acc52fb60d7898c58a415ea43add32dce0a01738828` | `v0.5.0` | M4：月度预算与超支提示、结余/日均支出统计；应用名「张律记账」+ 自适应图标，Debug 签名有效，约 25 MiB |
 | 0.6.0 | 6 | arm64-v8a | `zhanglv-expense-0.6.0-arm64-v8a-debug.apk` | `fb836c50c46cd1949bdaaa16f68c1fb696c2ed8005cf659960df86796aaa5999` | `v0.6.0` | M4.1：日历视图（按天看收支）、月份上限、编辑页日期间距；Debug 签名有效，约 25 MiB |
 | 0.7.0 | 7 | arm64-v8a | `zhanglv-expense-0.7.0-arm64-v8a-debug.apk` | `4c4f01a2ab9484e02fa6117f7ff4ab971c48976ffda834816b5569766552ddf8` | `v0.7.0` | M4.2：记账日期仅年月日 + 滚轮选择器，CSV 同步改日期；Debug 签名有效，约 24 MiB |
+| 1.0.0 | 8 | arm64-v8a | `zhanglv-expense-1.0.0-arm64-v8a-release.apk` | `9b5788f23b919e1c00c9d0d2bb92124afccca5f605db7fcb1d753b58d9dbe1ff` | `v1.0.0` | M5：正式签名（v2/v3，RSA-2048，证书指纹 533e05f4…）、完整备份/恢复；与旧版证书不同，必须卸载旧版并先导出备份，约 22 MiB |
 
 > x86_64 包仅用于模拟器验收（`build-android-x86_64/android-build/ZhangLvExpense.apk`），不列入交付清单。
 >
-> **侧载必须用 Debug 签名包**：Release 配置产出 `android-build-release-unsigned.apk`（未签名），
-> 真机安装会被拒绝（`apksigner verify` 报 `DOES NOT VERIFY / Missing META-INF/MANIFEST.MF`），模拟器宽松可装但真机不行。
-> 0.5.0 起交付包改用 Debug 构建（自动 Android Debug 签名，apksigner 校验通过）。旧版本包的签名状态未逐一复核。
+> **签名分界**：0.1.0–0.7.0 为 Android Debug 公共证书侧载包（需按当时流程用 Debug 配置构建）；
+> **1.0.0 起为正式签名包**（Release 构建 + apksigner 用项目私钥签名，v2/v3 方案）。两者证书不同，
+> Android 视为不同应用，**必须先卸载旧版再装新版**，旧数据不会自动迁移，须用「备份 → 导出完整备份 / 从备份恢复」搬运。
+> 详见 `Doc/RELEASE_SIGNING.md`。密钥库与口令不入库，丢失无法恢复。

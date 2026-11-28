@@ -881,4 +881,141 @@ QVector<Transaction> Database::queryByDate(int year, int month, int day,
     return result;
 }
 
+BackupData Database::exportAll(QString *error) const
+{
+    BackupData data;
+    QSqlDatabase db = d->database();
+    if (!db.isOpen()) {
+        if (error) *error = QStringLiteral("数据库未打开");
+        return data;
+    }
+
+    QSqlQuery q(db);
+    if (!q.exec(QStringLiteral(
+            "SELECT id, type, amount_cents, category, note, created_ms "
+            "FROM transactions ORDER BY id ASC"))) {
+        if (error) *error = lastError(q, QStringLiteral("导出账目失败"));
+        return {};
+    }
+    while (q.next()) {
+        Transaction tx;
+        tx.id = q.value(0).toLongLong();
+        tx.type = static_cast<TxType>(q.value(1).toInt());
+        tx.amountCents = q.value(2).toLongLong();
+        tx.category = q.value(3).toString();
+        tx.note = q.value(4).toString();
+        tx.createdMs = q.value(5).toLongLong();
+        data.transactions.append(tx);
+    }
+
+    QSqlQuery cq(db);
+    if (!cq.exec(QStringLiteral(
+            "SELECT type, name, builtin FROM categories ORDER BY type ASC, id ASC"))) {
+        if (error) *error = lastError(cq, QStringLiteral("导出分类失败"));
+        return {};
+    }
+    while (cq.next()) {
+        CategoryRecord c;
+        c.type = cq.value(0).toInt();
+        c.name = cq.value(1).toString();
+        c.builtin = cq.value(2).toInt() != 0;
+        data.categories.append(c);
+    }
+
+    QSqlQuery bq(db);
+    if (!bq.exec(QStringLiteral(
+            "SELECT year, month, type, amount_cents FROM budgets "
+            "ORDER BY year ASC, month ASC, type ASC"))) {
+        if (error) *error = lastError(bq, QStringLiteral("导出预算失败"));
+        return {};
+    }
+    while (bq.next()) {
+        BudgetRecord b;
+        b.year = bq.value(0).toInt();
+        b.month = bq.value(1).toInt();
+        b.type = bq.value(2).toInt();
+        b.amountCents = bq.value(3).toLongLong();
+        data.budgets.append(b);
+    }
+    return data;
+}
+
+bool Database::importAll(const BackupData &data, QString *error)
+{
+    QSqlDatabase db = d->database();
+    if (!db.isOpen() && !open(error))
+        return false;
+    if (!d->begin(&db, error))
+        return false;
+
+    // 单一事务内清空三表，任一步失败整体回滚。
+    const QStringList clearSql = {
+        QStringLiteral("DELETE FROM transactions"),
+        QStringLiteral("DELETE FROM categories"),
+        QStringLiteral("DELETE FROM budgets")
+    };
+    for (const QString &sql : clearSql) {
+        QSqlQuery q(db);
+        if (!q.exec(sql)) {
+            db.rollback();
+            if (error) *error = lastError(q, QStringLiteral("恢复时清空账本失败"));
+            return false;
+        }
+    }
+
+    QSqlQuery tq(db);
+    tq.prepare(QStringLiteral(
+        "INSERT INTO transactions(id, type, amount_cents, category, note, created_ms) "
+        "VALUES(?, ?, ?, ?, ?, ?)"));
+    for (const Transaction &tx : data.transactions) {
+        tq.addBindValue(QVariant::fromValue(tx.id));
+        tq.addBindValue(static_cast<int>(tx.type));
+        tq.addBindValue(QVariant::fromValue(tx.amountCents));
+        tq.addBindValue(tx.category);
+        tq.addBindValue(tx.note);
+        tq.addBindValue(QVariant::fromValue(tx.createdMs));
+        if (!tq.exec()) {
+            db.rollback();
+            if (error) *error = lastError(tq, QStringLiteral("恢复账目失败"));
+            return false;
+        }
+    }
+
+    QSqlQuery cq(db);
+    cq.prepare(QStringLiteral(
+        "INSERT INTO categories(type, name, builtin) VALUES(?, ?, ?)"));
+    for (const CategoryRecord &c : data.categories) {
+        cq.addBindValue(c.type);
+        cq.addBindValue(c.name);
+        cq.addBindValue(c.builtin ? 1 : 0);
+        if (!cq.exec()) {
+            db.rollback();
+            if (error) *error = lastError(cq, QStringLiteral("恢复分类失败"));
+            return false;
+        }
+    }
+
+    QSqlQuery bq(db);
+    bq.prepare(QStringLiteral(
+        "INSERT INTO budgets(year, month, type, amount_cents) VALUES(?, ?, ?, ?)"));
+    for (const BudgetRecord &b : data.budgets) {
+        bq.addBindValue(b.year);
+        bq.addBindValue(b.month);
+        bq.addBindValue(b.type);
+        bq.addBindValue(QVariant::fromValue(b.amountCents));
+        if (!bq.exec()) {
+            db.rollback();
+            if (error) *error = lastError(bq, QStringLiteral("恢复预算失败"));
+            return false;
+        }
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        if (error) *error = lastError(db, QStringLiteral("提交恢复失败"));
+        return false;
+    }
+    return true;
+}
+
 } // namespace zl

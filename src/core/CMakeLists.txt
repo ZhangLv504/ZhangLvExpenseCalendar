@@ -7,6 +7,8 @@ add_library(zlexpense_core STATIC
     Category.h
     CsvExporter.cpp
     CsvExporter.h
+    Backup.cpp
+    Backup.h
     DateTimeUtil.cpp
     DateTimeUtil.h
     Database.cpp

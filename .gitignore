@@ -11,6 +11,9 @@ dist/*
 .workbuddy/
 .cache/
 .screenshots/
+# 正式签名密钥库与口令：绝不入库，丢失无法恢复
+signing/
+*.jks
 
 # CMake / 编译产物
 CMakeUserPresets.json

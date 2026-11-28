@@ -5,6 +5,8 @@
 #include <QVector>
 
 #include "Transaction.h"
+#include "Category.h"
+#include "Backup.h"
 
 class QSqlDatabase;
 
@@ -15,13 +17,6 @@ struct MonthSummary {
     std::int64_t incomeCents = 0;
     std::int64_t expenseCents = 0;
     int count = 0;
-};
-
-// 分类条目：builtin 为 true 表示内置分类（不可删除）
-struct CategoryRecord {
-    QString name;
-    int type = 0;      // 0 支出 / 1 收入，对齐 TxType
-    bool builtin = false;
 };
 
 // 分类月度汇总条目（单位：分）
@@ -126,6 +121,12 @@ public:
     // 查询指定年月某日的全部账目，按时间倒序。
     QVector<Transaction> queryByDate(int year, int month, int day,
                                      QString *error = nullptr) const;
+
+    // ---- 完整备份与恢复 ----
+    // 导出全部数据（账目/分类/预算），用于跨签名迁移与换机备份。
+    BackupData exportAll(QString *error = nullptr) const;
+    // 用快照替换当前账本全部数据：单个事务内清空三表再写入，失败整体回滚。
+    bool importAll(const BackupData &data, QString *error = nullptr);
 
 private:
     bool seedBuiltinCategories(class QSqlDatabase &db, QString *error);

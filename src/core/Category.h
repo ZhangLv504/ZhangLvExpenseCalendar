@@ -11,6 +11,13 @@ struct CategoryInfo {
     QString icon; // 预留：图标资源名，当前为空
 };
 
+// 分类记录：type 0 支出 / 1 收入；builtin 为 true 表示内置不可删。
+struct CategoryRecord {
+    QString name;
+    int type = 0;
+    bool builtin = false;
+};
+
 class Category final {
 public:
     Category() = delete;

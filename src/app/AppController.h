@@ -103,6 +103,11 @@ public:
     // 返回空串表示用户取消或成功（细节经 exportFinished 通知），非空为错误信息。
     Q_INVOKABLE QString exportMonthCsv(int year, int month);
 
+    // 完整备份：导出账目+分类+预算为 JSON（SAF）；恢复从用户选择的文件读取并整体替换账本。
+    // 均经 exportFinished 通知结果；恢复成功会触发 refresh。
+    Q_INVOKABLE QString exportFullBackup();
+    Q_INVOKABLE QString importFullBackup();
+
 public slots:
     void refresh();
 

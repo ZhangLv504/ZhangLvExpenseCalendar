@@ -90,6 +90,10 @@ ApplicationWindow {
                         onClicked: app.exportMonthCsv(app.currentYear, app.currentMonth)
                     }
                     ToolButton {
+                        text: qsTr("备份")
+                        onClicked: stack.push(backupPage)
+                    }
+                    ToolButton {
                         text: qsTr("分类")
                         onClicked: stack.push(categoryPage)
                     }
@@ -423,6 +427,102 @@ ApplicationWindow {
                                 : app.updateRecord(row, selectedType, amountField.text, cat, noteField.text, dateText);
                             if (msg) errorLabel.text = msg;
                             else stack.pop();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 完整备份与恢复页：切换签名/换机前导出账目+分类+预算
+    Component {
+        id: backupPage
+        Page {
+            header: ToolBar {
+                RowLayout {
+                    anchors.fill: parent
+                    ToolButton {
+                        text: qsTr("‹ 返回")
+                        onClicked: stack.pop()
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Qt.AlignHCenter
+                        text: qsTr("完整备份")
+                        font.pixelSize: 18
+                        font.bold: true
+                    }
+                }
+            }
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 14
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("备份包含全部账目、自定义分类与月度预算，可跨版本、跨签名恢复。")
+                    color: "#666"
+                    font.pixelSize: 13
+                    wrapMode: Text.Wrap
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: qsTr("导出完整备份")
+                    onClicked: app.exportFullBackup()
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: qsTr("从备份恢复")
+                    onClicked: stack.push(confirmRestorePage)
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("提示：恢复会清空当前账本并整体替换。升级安装新签名版本前，请先导出备份。")
+                    color: "#C62828"
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+                Item { Layout.fillHeight: true }
+            }
+        }
+    }
+
+    // 恢复确认页
+    Component {
+        id: confirmRestorePage
+        Page {
+            header: ToolBar {
+                Label {
+                    anchors.centerIn: parent
+                    text: qsTr("确认恢复")
+                    font.pixelSize: 18
+                    font.bold: true
+                }
+            }
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 20
+                Label {
+                    text: qsTr("恢复将清空当前账本，用备份文件整体替换。此操作不可撤销，确定继续？")
+                    font.pixelSize: 15
+                    wrapMode: Text.Wrap
+                    Layout.preferredWidth: 320
+                    horizontalAlignment: Qt.AlignHCenter
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Button { text: qsTr("取消"); onClicked: stack.pop() }
+                    Button {
+                        text: qsTr("选择文件并恢复")
+                        highlighted: true
+                        onClicked: {
+                            var msg = app.importFullBackup();
+                            if (!msg) {
+                                // 回到明细页（确认页 + 备份页两层）
+                                stack.pop();
+                                stack.pop();
+                            }
                         }
                     }
                 }

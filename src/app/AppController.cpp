@@ -13,6 +13,7 @@
 #include "Category.h"
 #include "DateTimeUtil.h"
 #include "CsvExporter.h"
+#include "Backup.h"
 
 namespace zl {
 
@@ -449,6 +450,97 @@ QString AppController::exportMonthCsv(int year, int month)
     }
 
     const QString msg = QStringLiteral("已导出 %1 条账目").arg(items.size());
+    emit exportFinished(true, msg);
+    return QString();
+}
+
+QString AppController::exportFullBackup()
+{
+    if (!m_db || !m_db->isOpen())
+        return QStringLiteral("数据库未初始化");
+
+    QString error;
+    const BackupData data = m_db->exportAll(&error);
+    if (!error.isEmpty())
+        return error;
+    const QByteArray json = Backup::build(data);
+    if (json.isEmpty())
+        return QStringLiteral("生成备份数据失败");
+
+    const QString fileName = QStringLiteral("张律记账-完整备份-")
+        + QDate::currentDate().toString(QStringLiteral("yyyyMMdd"))
+        + QStringLiteral(".json");
+    const QString docDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QUrl defaultUrl = QUrl::fromLocalFile(QDir(docDir).filePath(fileName));
+
+    const QUrl target = QFileDialog::getSaveFileUrl(
+        nullptr, QStringLiteral("保存完整备份"), defaultUrl,
+        QStringLiteral("备份文件 (*.json)"));
+    if (target.isEmpty()) {
+        emit exportFinished(false, QStringLiteral("已取消备份"));
+        return QString();
+    }
+
+    const QString filePath = target.isLocalFile() ? target.toLocalFile() : target.toString();
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        const QString msg = QStringLiteral("无法写入所选位置：%1").arg(file.errorString());
+        emit exportFinished(false, msg);
+        return msg;
+    }
+    const qint64 written = file.write(json);
+    file.flush();
+    file.close();
+    if (written != json.size()) {
+        const QString msg = QStringLiteral("备份写入不完整，请检查存储空间");
+        emit exportFinished(false, msg);
+        return msg;
+    }
+
+    const QString msg = QStringLiteral("已备份 %1 笔账目、%2 个分类、%3 项预算")
+        .arg(data.transactions.size()).arg(data.categories.size()).arg(data.budgets.size());
+    emit exportFinished(true, msg);
+    return QString();
+}
+
+QString AppController::importFullBackup()
+{
+    if (!m_db || !m_db->isOpen())
+        return QStringLiteral("数据库未初始化");
+
+    const QUrl source = QFileDialog::getOpenFileUrl(
+        nullptr, QStringLiteral("选择完整备份文件"), QUrl(),
+        QStringLiteral("备份文件 (*.json)"));
+    if (source.isEmpty()) {
+        emit exportFinished(false, QStringLiteral("已取消恢复"));
+        return QString();
+    }
+
+    const QString filePath = source.isLocalFile() ? source.toLocalFile() : source.toString();
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        const QString msg = QStringLiteral("无法读取备份文件：%1").arg(file.errorString());
+        emit exportFinished(false, msg);
+        return msg;
+    }
+    const QByteArray json = file.readAll();
+    file.close();
+
+    BackupData data;
+    QString error;
+    if (!Backup::parse(json, &data, &error)) {
+        emit exportFinished(false, error);
+        return error;
+    }
+
+    // 校验通过后整体替换账本；事务失败自动回滚，不破坏原数据。
+    if (!m_db->importAll(data, &error)) {
+        emit exportFinished(false, error);
+        return error;
+    }
+
+    refresh();
+    const QString msg = QStringLiteral("已恢复 %1 笔账目").arg(data.transactions.size());
     emit exportFinished(true, msg);
     return QString();
 }
