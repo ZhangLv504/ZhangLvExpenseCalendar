@@ -23,7 +23,7 @@ void CsvTest::emptyList()
     const QByteArray csv = zl::CsvExporter::build({});
     QVERIFY(csv.startsWith("\xEF\xBB\xBF"));
     const QString text = QString::fromUtf8(csv.constData() + 3);
-    QCOMPARE(text, QStringLiteral("日期时间,类型,分类,金额(元),备注\r\n"));
+    QCOMPARE(text, QStringLiteral("日期,类型,分类,金额(元),备注\r\n"));
 }
 
 void CsvTest::basicRows()
@@ -45,7 +45,8 @@ void CsvTest::basicRows()
     const QString text = QString::fromUtf8(zl::CsvExporter::build({tx, income}).constData() + 3);
     const QStringList lines = text.split(QStringLiteral("\r\n"), Qt::SkipEmptyParts);
     QCOMPARE(lines.size(), 3);
-    QVERIFY(lines.at(1).contains(QStringLiteral("2026-11-25 14:30")));
+    QVERIFY(lines.at(1).contains(QStringLiteral("2026-11-25")));
+    QVERIFY(!lines.at(1).contains(QStringLiteral("14:30"))); // 无时分
     QVERIFY(lines.at(1).contains(QStringLiteral("支出")));
     QVERIFY(lines.at(1).contains(QStringLiteral("餐饮")));
     QVERIFY(lines.at(1).contains(QStringLiteral("12.34")));

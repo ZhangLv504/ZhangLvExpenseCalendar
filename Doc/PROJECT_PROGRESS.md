@@ -7,8 +7,8 @@
 
 | 项         | 当前值                                                       |
 | ---------- | ------------------------------------------------------------ |
-| 当前里程碑 | **M4.1 — 已交付**（日历视图，用户反馈驱动）                  |
-| 当前版本   | `0.6.0`（versionCode 6）                                     |
+| 当前里程碑 | **M4.2 — 已交付**（日期改为年月日 + 选择器，用户反馈驱动）   |
+| 当前版本   | `0.7.0`（versionCode 7）                                     |
 | 下一步动作 | 进入 M5：正式签名与发布打磨；真机操作先遵守第 1.1 节安全契约 |
 
 ## 1. 环境契约（锁定）
@@ -44,6 +44,7 @@
 | M3     | CSV 导出（Android SAF，不申请存储权限）                  | 已交付（0.4.0） |
 | M4     | 月度预算、结余/日均统计                                 | 已交付（0.5.0） |
 | M4.1   | 日历视图（按天看收支）、月份上限、编辑页间距            | 已交付（0.6.0） |
+| M4.2   | 记账日期仅年月日、滚轮选择器替代手工输入                | 已交付（0.7.0） |
 | M5     | 正式签名与发布打磨                                      | 未开始 |
 
 > 说明：M0 搭建骨架时已将核心记账闭环一并实现；0.2.0 补齐 M1 收尾项——分类持久化与自定义管理、
@@ -58,15 +59,15 @@ ZhangLvExpense/
 │   ├── core/                    # 纯 C++ 核心层（可独立单测，无 QML 依赖）
 │   │   ├── Money.{h,cpp}        # 金额解析/格式化，全链路 int64_t 分，逐字符处理禁用浮点
 │   │   ├── CsvExporter.{h,cpp}  # CSV 生成：UTF-8 BOM、RFC4180 转义、公式注入防护
-│   │   ├── DateTimeUtil.{h,cpp}# "yyyy-MM-dd HH:mm" 解析/格式化，毫秒时间戳流转
+│   │   ├── DateTimeUtil.{h,cpp}# "yyyy-MM-dd" 日期解析/格式化（旧时分接口仅兼容历史），毫秒时间戳流转
 │   │   ├── Transaction.{h,cpp}  # 账目模型 + 合法性校验
 │   │   ├── Category.{h,cpp}     # 内置收支分类（首次打开播种进 SQLite）
 │   │   └── Database.{h,cpp}     # SQLite 引擎：建表/增删改查/筛选/月度与分类汇总/预算 CRUD/月度趋势
 │   └── app/
 │       ├── main.cpp             # 入口：QApplication(Basic 样式)、私有目录建库、注册 QML 上下文
-│       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选、分类管理、日期时间、统计、SAF 导出、预算
+│       ├── AppController.{h,cpp}# QML 桥接：金额元字符串、筛选、分类管理、年月日、统计、SAF 导出、预算
 │       ├── TransactionModel.*   # QAbstractListModel（含 count 属性），供 ListView 绑定
-│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑、删除确认、分类管理、分类统计（含预算卡片）、日历视图、导出按钮与轻提示
+│       └── qml/Main.qml         # 竖屏 UI：月度导航、汇总、搜索筛选、明细、记一笔/编辑（年月日滚轮选择器）、删除确认、分类管理、分类统计（含预算卡片）、日历视图、导出按钮与轻提示
 ├── tests/                       # tst_money / tst_database / tst_datetime / tst_csv（Qt Test）
 ├── scripts/device.sh            # 真机/模拟器安全操作封装（白名单；ui 动作仅限 emulator-*）
 ├── android/                     # Android 打包模板（manifest 竖屏、包名、gradle）
@@ -83,7 +84,30 @@ ZhangLvExpense/
 
 ## 4. 验收结果
 
-### 4.0 M4.1 / 0.6.0（当前）
+### 4.0 M4.2 / 0.7.0（当前）
+
+> 用户反馈：记一笔的日期只要年月日，且要能选择而不是手工输入。
+
+#### 核心改动
+- `DateTimeUtil` 新增严格 `yyyy-MM-dd` 解析/格式化（旧 `yyyy-MM-dd HH:mm` 接口仅保留兼容历史数据）；新增账目取所选日期本地 00:00，历史含时分数据仍按本地日期归属，读时只显示年月日。
+- `AppController` 的新增/编辑/回显/日历明细 dateText 统一为 `yyyy-MM-dd`；明细列表 `timeText` 改为 `MM-dd`；CSV 表头改为「日期」且只输出年月日。
+- 记一笔/编辑页移除日期输入框，改为年/月/日三个 Tumbler 滚轮选择器：默认今天，编辑时按记录回填；年份 2000..今年，当月最大到今天，关闭循环滚动，避免 2026 下方回到 2000。
+
+#### 桌面单测
+- CTest 4 套件全过；`tst_datetime` 新增 date-only 解析（含零填充严格校验、非法日期）、格式化与往返共 16 项；`tst_csv` 更新表头与"无时分"断言。
+
+#### Android 构建
+- arm64-v8a Debug 包：`dist/zhanglv-expense-0.7.0-arm64-v8a-debug.apk`（SHA-256 见 dist/README.md）
+- aapt 校验：versionCode 7 / versionName 0.7.0 / 应用名「张律记账」/ 自适应图标；apksigner 签名有效（Android Debug，证书与可真机侧载包一致）
+
+#### 模拟器验收（Android 15, x86_64, -gpu swiftshader）
+- 记一笔页日期区显示年/月/日三个滚轮，默认 2026/11/28（今天），关闭循环后当前年/月/日下方为空白而非回到 2000/1/1
+- 滚动日滚轮选到 27，输入支出 12.34 保存：明细显示「餐饮 -12.34 / 11-27」（无时分），当月支出汇总 12.34
+- 编辑该账目回填 2026/11/27（非今天），金额 12.34 正确；force-stop 重启后记录仍在
+- 日历页 27 号显示 -12.34；点击 27 号后汇总条「收 0.00 支 12.34」、当天明细日期「2026-11-27」（无时分）
+- 已知模拟器 SwiftShader 偶发 `hwuiTask` SIGABRT（页面切换时），属图形栈问题；本次在重启后完成全部链路验收，无 QML 错误
+
+### 4.1 M4.1 / 0.6.0（历史）
 
 > 用户手机实测反馈驱动：时间不超过当前月、点击看某天收支、编辑页日期栏上方加间距。
 
@@ -101,7 +125,7 @@ ZhangLvExpense/
 - 「›」下月按钮在当月为灰色禁用（`canGoNextMonth()`），无法翻到未来月份
 - 编辑页「日期时间」栏上方已加间距；无 QML 错误/FATAL
 
-### 4.1 M4 / 0.5.0
+### 4.2 M4 / 0.5.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 / `tst_database`：19（新增预算 CRUD、近 N 月趋势归属）/ `tst_datetime`：17 / `tst_csv`：7 项全部通过
@@ -121,7 +145,7 @@ ZhangLvExpense/
 - 模拟器 SwiftShader 在交互过程中偶发 hwuiTask SIGABRT 与 adb 连接抖动，属图形栈/连接层问题；预算设置完整 UI 交互未能在此环境稳定跑完，其数据层由 tst_database 2 项新测试覆盖
 - 无 QML 错误/FATAL（应用启动与统计页加载阶段）
 
-### 4.2 M3 / 0.4.0
+### 4.3 M3 / 0.4.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 / `tst_database`：17 / `tst_datetime`：17 / `tst_csv`：7 项全部通过
@@ -142,7 +166,7 @@ ZhangLvExpense/
 - 卸载/重装走 `scripts/device.sh` 闭环通过，卸载后确认清除
 - 无 QML 错误/FATAL（模拟器 SwiftShader 偶发 hwui SIGABRT 为已知图形栈问题，重启模拟器后稳定）
 
-### 4.3 M2 / 0.3.0
+### 4.4 M2 / 0.3.0
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -163,7 +187,7 @@ ZhangLvExpense/
 - 缺陷修复：空态文案被列表内容层遮挡（0.2.0 遗留，`app.model.count` 在 QAbstractListModel 上不存在）；为 TransactionModel 补 `count` 属性，并将空态标签改为列表容器内的独立叠加层，验证通过
 - logcat 无 QML 错误/FATAL
 
-### 4.4 M1 / 0.2.0（历史）
+### 4.5 M1 / 0.2.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -185,7 +209,7 @@ ZhangLvExpense/
 - 持久化：新增账目 5.00 与自定义分类 PersistCat 后 force-stop 重启，账目与分类均保留（SQLite 真实落盘）
 - 自动化工具：`scripts/device.sh` 新增 `start/stop/shot/ui`；`ui`（tap/swipe/text/key）硬校验设备序列号为 `emulator-*`，真机一律拒绝
 
-### 4.5 M0 / 0.1.0（历史）
+### 4.6 M0 / 0.1.0（历史）
 
 #### 桌面单测（mingw_64，Qt Test）
 - `tst_money`：31 项通过（边界金额、两位小数、负值、非法格式、溢出、往返转换）
@@ -204,7 +228,7 @@ ZhangLvExpense/
 - 持久化：force-stop 后重启，账目仍在（SQLite 真实落盘）
 - 非法金额（格式错误）被拒绝并提示，不落库
 
-### 4.6 已知限制
+### 4.7 已知限制
 - 模拟器 SwiftShader 软件渲染下，部分 Qt Quick Controls 控件（ToolBar/Button/ComboBox 背景）出现梯形斜切视觉瑕疵；属模拟器图形栈渲染问题，arm64 真机交付包不受影响。
 - 应用使用 Basic 样式以保证低配设备渲染稳定。
 - 正式签名未接入（当前 debug 签名，仅侧载验证），按约定在 M5 前落地。
@@ -212,6 +236,7 @@ ZhangLvExpense/
 
 ## 5. 变更日志
 
+- **M4.2 / 0.7.0（2026-11-28）**：按用户反馈把记账日期改为只保存/展示年月日，记一笔与编辑页用年/月/日滚轮选择器替代手工输入（上限今年/今天、不循环）；CSV 表头与内容同步改为日期；桌面 4 套件全过 + 模拟器记一笔/编辑回填/持久化/日历链路验收通过，arm64 Debug 交付包已生成。
 - **M4.1 / 0.6.0（2026-11-26）**：按用户手机实测反馈新增日历视图（当月网格、每天收支小计、点击某天看当天明细），月份导航不超过当前月，编辑页日期栏上方加间距；Database 新增 `monthDailySummary`/`queryByDate`，tst_database 增加每日汇总用例；模拟器完整验收通过。
 - **M4 / 0.5.0（2026-11-26）**：新增 budgets 表与预算 CRUD（upsert/清除/跨月隔离），统计页增加月度预算卡片（进度条/剩余/超支提示）、结余与日均支出指标；`budgetInfo` 在 C++ 以 int64 分完成所有金额运算；修复预算卡片布局重叠与趋势测试共享数据污染；桌面 74 项单测 + 模拟器统计页加载/布局验收通过（预算设置完整 UI 交互受模拟器图形栈限制未跑完，数据层由单测覆盖）。
 - **M3 / 0.4.0（2026-11-26）**：新增 CsvExporter（UTF-8 BOM / RFC4180 转义 / 公式注入防护）与 7 项单测；引入 QtWidgets，用 QFileDialog 的 Android 原生 SAF（ACTION_CREATE_DOCUMENT）+ QFile 写 content:// URI 实现导出，不申请存储权限；主界面加导出按钮与轻提示；桌面 72 项单测 + 模拟器 SAF 导出落盘校验通过。

@@ -10,6 +10,7 @@ APK 不入库，仅在本机 `dist/` 保留备份。本文件记录每个交付�
 | 0.4.0 | 4 | arm64-v8a | `zhanglv-expense-0.4.0-arm64-v8a-debug.apk` | `6a5853d85976916e87d60d8fc469105c1cb841ad778257074ca24851840ffa27` | `v0.4.0` | M3：CSV 导出（SAF）、公式注入防护，debug 签名，约 22 MiB |
 | 0.5.0 | 5 | arm64-v8a | `zhanglv-expense-0.5.0-arm64-v8a-debug.apk` | `bf34538b4c7c4eed313f5acc52fb60d7898c58a415ea43add32dce0a01738828` | `v0.5.0` | M4：月度预算与超支提示、结余/日均支出统计；应用名「张律记账」+ 自适应图标，Debug 签名有效，约 25 MiB |
 | 0.6.0 | 6 | arm64-v8a | `zhanglv-expense-0.6.0-arm64-v8a-debug.apk` | `fb836c50c46cd1949bdaaa16f68c1fb696c2ed8005cf659960df86796aaa5999` | `v0.6.0` | M4.1：日历视图（按天看收支）、月份上限、编辑页日期间距；Debug 签名有效，约 25 MiB |
+| 0.7.0 | 7 | arm64-v8a | `zhanglv-expense-0.7.0-arm64-v8a-debug.apk` | `4c4f01a2ab9484e02fa6117f7ff4ab971c48976ffda834816b5569766552ddf8` | `v0.7.0` | M4.2：记账日期仅年月日 + 滚轮选择器，CSV 同步改日期；Debug 签名有效，约 24 MiB |
 
 > x86_64 包仅用于模拟器验收（`build-android-x86_64/android-build/ZhangLvExpense.apk`），不列入交付清单。
 >

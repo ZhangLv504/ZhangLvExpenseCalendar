@@ -10,6 +10,7 @@ dist/*
 .vscode/
 .workbuddy/
 .cache/
+.screenshots/
 
 # CMake / 编译产物
 CMakeUserPresets.json

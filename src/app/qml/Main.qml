@@ -216,6 +216,41 @@ ApplicationWindow {
             property int row: -1
             property int selectedType: 0
 
+            // 日期选择器：只选年月日，不输入时分；年份上限为今年，当月上限为今天
+            readonly property var yearModel: (function() {
+                var arr = [];
+                for (var y = 2000; y <= new Date().getFullYear(); ++y) arr.push(y);
+                return arr;
+            })()
+            readonly property var monthModel: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+            readonly property int pickerYear: yearModel[yearTumbler.currentIndex] || 2000
+            readonly property int pickerMonth: monthModel[monthTumbler.currentIndex] || 1
+            property int selectedDay: 1
+
+            function two(n) { return (n < 10 ? "0" : "") + n; }
+
+            function maxDayOf(y, m) {
+                var dim = new Date(y, m, 0).getDate();
+                var today = new Date();
+                if (y === today.getFullYear() && m === today.getMonth() + 1)
+                    dim = Math.min(dim, today.getDate());
+                return dim;
+            }
+
+            function rebuildDays() {
+                var max = maxDayOf(pickerYear, pickerMonth);
+                var arr = [];
+                for (var d = 1; d <= max; ++d) arr.push(d);
+                dayTumbler.model = arr;
+                if (dayTumbler.currentIndex < 0) dayTumbler.currentIndex = 0;
+                if (dayTumbler.currentIndex >= max) dayTumbler.currentIndex = max - 1;
+                selectedDay = dayTumbler.currentIndex + 1;
+            }
+
+            function pickedDateText() {
+                return pickerYear + "-" + two(pickerMonth) + "-" + two(selectedDay);
+            }
+
             function applyType(t) {
                 selectedType = t;
                 incomeRadio.checked = (t === 1);
@@ -225,18 +260,32 @@ ApplicationWindow {
             }
 
             Component.onCompleted: {
+                var y, m, d;
                 if (!isNew) {
                     var rec = app.recordAt(row);
                     amountField.text = rec.amountText;
                     noteField.text = rec.note;
-                    dateField.text = rec.dateText;
+                    var parts = String(rec.dateText).split("-");
+                    y = Number(parts[0]);
+                    m = Number(parts[1]);
+                    d = Number(parts[2]);
                     applyType(rec.type);
                     var cats = (rec.type === 1) ? app.incomeCategories() : app.expenseCategories();
                     categoryCombo.currentIndex = cats.indexOf(rec.category);
                 } else {
-                    dateField.text = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm");
+                    var today = new Date();
+                    y = today.getFullYear();
+                    m = today.getMonth() + 1;
+                    d = today.getDate();
                     applyType(0);
                 }
+                if (!y) y = new Date().getFullYear();
+                if (!m || m < 1 || m > 12) m = 1;
+                yearTumbler.currentIndex = Math.max(0, y - 2000);
+                monthTumbler.currentIndex = m - 1;
+                rebuildDays();
+                dayTumbler.currentIndex = Math.max(0, Math.min(d - 1, maxDayOf(y, m) - 1));
+                selectedDay = dayTumbler.currentIndex + 1;
                 errorLabel.text = "";
             }
 
@@ -295,15 +344,48 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: qsTr("日期时间")
+                    text: qsTr("日期")
                     color: "#888"
                     font.pixelSize: 13
                     Layout.topMargin: 12
                 }
-                TextField {
-                    id: dateField
+                RowLayout {
                     Layout.fillWidth: true
-                    placeholderText: "yyyy-MM-dd HH:mm"
+                    Layout.preferredHeight: 150
+                    spacing: 2
+                    Tumbler {
+                        id: yearTumbler
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 120
+                        Layout.fillHeight: true
+                        model: yearModel
+                        visibleItemCount: 5
+                        wrap: false
+                        font.pixelSize: 16
+                        onCurrentIndexChanged: rebuildDays()
+                    }
+                    Label { text: qsTr("年"); color: "#888"; font.pixelSize: 12 }
+                    Tumbler {
+                        id: monthTumbler
+                        Layout.preferredWidth: 56
+                        Layout.fillHeight: true
+                        model: monthModel
+                        visibleItemCount: 5
+                        wrap: false
+                        font.pixelSize: 16
+                        onCurrentIndexChanged: rebuildDays()
+                    }
+                    Label { text: qsTr("月"); color: "#888"; font.pixelSize: 12 }
+                    Tumbler {
+                        id: dayTumbler
+                        Layout.preferredWidth: 56
+                        Layout.fillHeight: true
+                        visibleItemCount: 5
+                        wrap: false
+                        font.pixelSize: 16
+                        onCurrentIndexChanged: selectedDay = currentIndex + 1
+                    }
+                    Label { text: qsTr("日"); color: "#888"; font.pixelSize: 12 }
                 }
 
                 Label { text: qsTr("备注"); color: "#888"; font.pixelSize: 13 }
@@ -335,9 +417,10 @@ ApplicationWindow {
                         highlighted: true
                         onClicked: {
                             var cat = categoryCombo.currentText;
+                            var dateText = pickedDateText();
                             var msg = isNew
-                                ? app.addRecord(selectedType, amountField.text, cat, noteField.text, dateField.text)
-                                : app.updateRecord(row, selectedType, amountField.text, cat, noteField.text, dateField.text);
+                                ? app.addRecord(selectedType, amountField.text, cat, noteField.text, dateText)
+                                : app.updateRecord(row, selectedType, amountField.text, cat, noteField.text, dateText);
                             if (msg) errorLabel.text = msg;
                             else stack.pop();
                         }

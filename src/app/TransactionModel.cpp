@@ -35,8 +35,9 @@ QVariant TransactionModel::data(const QModelIndex &index, int role) const
     case NoteRole:
         return tx.note;
     case TimeTextRole:
+        // 日期只到年月日：历史含时分的数据同样只显示月日
         return QDateTime::fromMSecsSinceEpoch(tx.createdMs)
-            .toString(QStringLiteral("MM-dd hh:mm"));
+            .toString(QStringLiteral("MM-dd"));
     default:
         return QVariant();
     }

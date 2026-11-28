@@ -104,8 +104,8 @@ QString AppController::addRecord(int type, const QString &amountText,
     tx.category = category.trimmed();
     tx.note = note.trimmed();
     if (!dateText.trimmed().isEmpty()
-        && !DateTimeUtil::parse(dateText, &tx.createdMs))
-        return QStringLiteral("日期格式不正确，应为 年-月-日 时:分");
+        && !DateTimeUtil::parseDate(dateText, &tx.createdMs))
+        return QStringLiteral("日期格式不正确，应为 年-月-日");
 
     QString error;
     if (!m_db->insert(&tx, &error)) {
@@ -135,8 +135,8 @@ QString AppController::updateRecord(int row, int type, const QString &amountText
     tx.category = category.trimmed();
     tx.note = note.trimmed();
     if (!dateText.trimmed().isEmpty()
-        && !DateTimeUtil::parse(dateText, &tx.createdMs))
-        return QStringLiteral("日期格式不正确，应为 年-月-日 时:分");
+        && !DateTimeUtil::parseDate(dateText, &tx.createdMs))
+        return QStringLiteral("日期格式不正确，应为 年-月-日");
 
     QString error;
     if (!m_db->update(tx, &error)) {
@@ -171,7 +171,7 @@ QVariantMap AppController::recordAt(int row) const
     map.insert(QStringLiteral("amountText"), Money::format(tx.amountCents));
     map.insert(QStringLiteral("category"), tx.category);
     map.insert(QStringLiteral("note"), tx.note);
-    map.insert(QStringLiteral("dateText"), DateTimeUtil::format(tx.createdMs));
+    map.insert(QStringLiteral("dateText"), DateTimeUtil::formatDate(tx.createdMs));
     return map;
 }
 
@@ -345,7 +345,7 @@ QVariantList AppController::transactionsOnDay(int day) const
         m.insert(QStringLiteral("amountText"), Money::format(tx.amountCents));
         m.insert(QStringLiteral("category"), tx.category);
         m.insert(QStringLiteral("note"), tx.note);
-        m.insert(QStringLiteral("dateText"), DateTimeUtil::format(tx.createdMs));
+        m.insert(QStringLiteral("dateText"), DateTimeUtil::formatDate(tx.createdMs));
         result.append(m);
     }
     return result;

@@ -1,14 +1,12 @@
 #include "CsvExporter.h"
 
-#include <QDateTime>
 #include <QLatin1Char>
 
+#include "DateTimeUtil.h"
 #include "Money.h"
 
 namespace zl {
 namespace {
-
-constexpr const char *kDatePattern = "yyyy-MM-dd HH:mm";
 
 QString typeText(TxType type)
 {
@@ -49,11 +47,10 @@ QString CsvExporter::escapeField(const QString &text, bool guardFormula)
 QByteArray CsvExporter::build(const QVector<Transaction> &items)
 {
     QStringList lines;
-    lines << QStringLiteral("日期时间,类型,分类,金额(元),备注");
+    lines << QStringLiteral("日期,类型,分类,金额(元),备注");
 
     for (const Transaction &tx : items) {
-        const QString dateText = QDateTime::fromMSecsSinceEpoch(tx.createdMs)
-            .toString(QString::fromLatin1(kDatePattern));
+        const QString dateText = DateTimeUtil::formatDate(tx.createdMs);
         const QString amountText = Money::format(tx.amountCents); // 金额恒为正，无负号
 
         const QStringList cells = {

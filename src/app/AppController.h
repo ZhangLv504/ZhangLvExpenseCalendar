@@ -48,8 +48,8 @@ public:
     // 初始化数据库并加载当前月
     Q_INVOKABLE bool initialize(QString *error = nullptr);
 
-    // 新增：amountText 为元字符串（如 "12.34"）；dateText 格式 "yyyy-MM-dd HH:mm"，
-    // 为空则用当前时间。返回错误信息，空串表示成功。
+    // 新增：amountText 为元字符串（如 "12.34"）；dateText 格式 "yyyy-MM-dd"（年月日），
+    // 为空则用当天。返回错误信息，空串表示成功。
     Q_INVOKABLE QString addRecord(int type, const QString &amountText,
                                   const QString &category, const QString &note,
                                   const QString &dateText = QString());

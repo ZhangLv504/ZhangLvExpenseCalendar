@@ -8,6 +8,13 @@ class DateTimeTest : public QObject
     Q_OBJECT
 
 private slots:
+    void parseDateValid_data();
+    void parseDateValid();
+    void parseDateInvalid_data();
+    void parseDateInvalid();
+    void formatDateOnly();
+    void dateRoundTrip_data();
+    void dateRoundTrip();
     void parseValid_data();
     void parseValid();
     void parseInvalid_data();
@@ -23,6 +30,72 @@ private:
         return QDateTime(QDate(y, m, d), QTime(hh, mm, 0)).toMSecsSinceEpoch();
     }
 };
+
+void DateTimeTest::parseDateValid_data()
+{
+    QTest::addColumn<QString>("text");
+    QTest::addColumn<qint64>("ms");
+    QTest::newRow("normal")   << QStringLiteral("2026-11-28") << msOf(2026, 11, 28, 0, 0);
+    QTest::newRow("year-end") << QStringLiteral("2026-12-31") << msOf(2026, 12, 31, 0, 0);
+    QTest::newRow("leap-day") << QStringLiteral("2028-02-29") << msOf(2028, 2, 29, 0, 0);
+    QTest::newRow("spaces")   << QStringLiteral("  2026-01-02  ") << msOf(2026, 1, 2, 0, 0);
+}
+
+void DateTimeTest::parseDateValid()
+{
+    QFETCH(QString, text);
+    QFETCH(qint64, ms);
+    std::int64_t out = -1;
+    QVERIFY2(zl::DateTimeUtil::parseDate(text, &out), qPrintable(text));
+    QCOMPARE(out, ms);
+}
+
+void DateTimeTest::parseDateInvalid_data()
+{
+    QTest::addColumn<QString>("text");
+    QTest::newRow("empty")        << QStringLiteral("");
+    QTest::newRow("with time")    << QStringLiteral("2026-11-25 14:30");
+    QTest::newRow("no zero pad")  << QStringLiteral("2026-1-5");
+    QTest::newRow("slash")        << QStringLiteral("2026/11/25");
+    QTest::newRow("invalid day")  << QStringLiteral("2026-02-30");
+    QTest::newRow("non leap")     << QStringLiteral("2027-02-29");
+    QTest::newRow("extra text")   << QStringLiteral("2026-11-25x");
+    QTest::newRow("letters")      << QStringLiteral("abcd-ef-gh");
+}
+
+void DateTimeTest::parseDateInvalid()
+{
+    QFETCH(QString, text);
+    std::int64_t out = 12345;
+    QVERIFY(!zl::DateTimeUtil::parseDate(text, &out));
+    QCOMPARE(out, qint64(12345)); // 失败时不改写输出
+}
+
+void DateTimeTest::formatDateOnly()
+{
+    // 历史账目含时分，展示仍只取年月日（本地时区）
+    QCOMPARE(zl::DateTimeUtil::formatDate(msOf(2026, 11, 25, 14, 30)),
+             QStringLiteral("2026-11-25"));
+    QCOMPARE(zl::DateTimeUtil::formatDate(msOf(2026, 1, 1, 0, 0)),
+             QStringLiteral("2026-01-01"));
+}
+
+void DateTimeTest::dateRoundTrip_data()
+{
+    QTest::addColumn<qint64>("ms");
+    QTest::newRow("a") << msOf(2026, 11, 28, 0, 0);
+    QTest::newRow("b") << msOf(2025, 1, 1, 0, 0);
+    QTest::newRow("c") << msOf(2028, 2, 29, 0, 0);
+}
+
+void DateTimeTest::dateRoundTrip()
+{
+    QFETCH(qint64, ms);
+    const QString text = zl::DateTimeUtil::formatDate(ms);
+    std::int64_t out = 0;
+    QVERIFY(zl::DateTimeUtil::parseDate(text, &out));
+    QCOMPARE(out, ms);
+}
 
 void DateTimeTest::parseValid_data()
 {
